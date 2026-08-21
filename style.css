@@ -73,6 +73,15 @@ main{flex:1;display:flex;flex-direction:column;min-width:0;overflow:hidden}
 .tally b{font-weight:500}
 .tally .ok{color:var(--green)} .tally .no{color:var(--red)}
 
+/* cross-device sync indicator */
+.sync{width:7px;height:7px;border-radius:50%;flex:none;background:var(--tx2);
+  opacity:.45;transition:background .2s,opacity .2s}
+.sync.idle{background:var(--green);opacity:.55}
+.sync.busy{background:var(--tx2);opacity:1;animation:syncpulse 1.1s ease-in-out infinite}
+.sync.err{background:var(--red);opacity:.9;animation:none}
+.sync.off{background:var(--tx2);opacity:.22;animation:none}
+@keyframes syncpulse{0%,100%{opacity:.25}50%{opacity:1}}
+
 .stage{flex:1;display:flex;gap:26px;padding:22px 24px;overflow:hidden;min-height:0}
 .boardcol{display:flex;flex-direction:column;gap:11px;min-width:0}
 .panel{flex:1;min-width:0;max-width:520px;display:flex;flex-direction:column;overflow:hidden}
@@ -225,6 +234,7 @@ main{flex:1;display:flex;flex-direction:column;min-width:0;overflow:hidden}
   .stage{padding:14px}
   .top{padding:9px 12px;gap:8px}
   .tally{display:none}
+  .sync{width:6px;height:6px}
   .counter{font-size:10.5px}
 }
 

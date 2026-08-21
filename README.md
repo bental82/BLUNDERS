@@ -55,6 +55,12 @@ Personal use is one thing; a public URL is redistribution. Turn on Vercel's
 Deployment Protection (Settings → Deployment Protection → Vercel Authentication, or
 Password Protection) and keep this repo private.
 
+The Supabase publishable key is embedded in the client, and the progress table is open
+to it, so anyone holding the key can read or clear your progress. That is bounded by
+keeping the deployment protected — but note the key is inlined in
+`dist/clamp-trainer.html` too, so that file is now yours alone rather than something to
+pass around.
+
 ## Rebuilding from the PGN
 
 Only needed if you replace `source/Preventing Blunders in Chess.pgn`.
@@ -85,6 +91,9 @@ build/extract.py      PGN  -> data/course.json
 build/pieces.py            -> data/pieces.json
 build/bundle.py       all  -> dist/clamp-trainer.html
 build/body.html       markup shared by both builds (edit index.html, not this)
+build/verify.mjs      walks the whole course through the real app
+build/verify-sync.mjs drives two browsers against a mock endpoint
+db/schema.sql         the Supabase table, to paste into the SQL editor
 source/*.pgn          the Chessable export
 dist/                 the offline single-file build
 ```
@@ -98,8 +107,45 @@ dist/                 the offline single-file build
 Saved to `localStorage` after every answered move, every item you move to, every lesson
 you open, and every settings change. It keeps the result of each individual quiz move
 (clean / hint / missed), which lessons you've read, your cursor, and your settings.
-Storage is per-origin: the deployed site and `dist/clamp-trainer.html` keep separate
-progress, so pick one to actually work through.
+
+## Cross-device sync
+
+The same progress also syncs through Supabase, so the phone and the laptop stay in step
+— and so does `dist/clamp-trainer.html`, which used to keep its own separate progress.
+There is no login: it is one row, one user, and the publishable key that ships in the
+client is the credential.
+
+Set it up once:
+
+1. Run [`db/schema.sql`](db/schema.sql) in the Supabase SQL editor. It creates
+   `public.clamp_progress` and touches nothing else.
+2. That's it — the project URL and publishable key are already in `app.js`, under
+   `var SYNC`. Point them somewhere else by setting `window.SYNC` before
+   `startTrainer()` runs.
+
+A dot in the top bar shows the state: dim = off, pulsing = syncing, green = up to date,
+red = the last sync failed. Failure is not lossy — everything still lands in
+`localStorage` and goes up on the next successful sync.
+
+**Progress merges, it does not overwrite.** Both devices can be ahead of each other and
+neither loses work:
+
+| | rule |
+|---|---|
+| quiz results | worst of the two wins (`clean` < `hint` < `missed`) |
+| lessons read | union |
+| cursor, settings | whichever device wrote last |
+
+Worst-of is not a compromise — it is the rule `mark()` already applies when you
+re-answer a move, which makes the result map grow-only and the merge independent of the
+order the devices happen to sync in.
+
+The one thing that rule cannot express is a deliberate wipe, which a merge would simply
+undo. So *Reset progress* bumps a generation counter, and a higher generation beats the
+merge outright; the wipe reaches the other devices instead of being merged away. That
+is also why the button now says "on every device".
+
+Roughly 17 KB at 100% completion — one row, well inside the free tier.
 
 ## Known issue in the source PGN
 
@@ -120,6 +166,16 @@ npm i playwright
 python3 -m http.server 8000 &
 node build/verify.mjs http://localhost:8000/
 node build/verify.mjs file://$PWD/dist/clamp-trainer.html
+```
+
+`build/verify-sync.mjs` covers the sync layer instead. It stands up a mock endpoint
+speaking the same dialect as Supabase and drives two browser contexts as two devices,
+asserting that each one's work reaches the other, that the merge takes the worst result
+in both directions, that a reset propagates, and that a dead endpoint degrades to
+local-only without losing anything. It needs no network and no Supabase project.
+
+```sh
+node build/verify-sync.mjs
 ```
 
 ## Credits

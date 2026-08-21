@@ -26,6 +26,10 @@ page.on("console", (m) => {
     errs.push("console: " + m.text());
 });
 
+// This walk answers all 835 quiz moves. Sync stays off so it can never push a
+// synthetic run into the real Supabase row; build/verify-sync.mjs covers sync.
+await page.addInitScript(() => { window.SYNC = {}; });
+
 await page.goto(url);
 await page.waitForFunction(() => !!window.__CT, null, { timeout: 20000 });
 await page.evaluate(() => localStorage.clear());
