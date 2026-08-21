@@ -29,28 +29,48 @@ OUT = os.path.join(ROOT, "data", "pieces.json")
 ROUND = os.path.join(ROOT, "build", "pieces-round.json")
 EXTERNAL = os.path.join(ROOT, "build", "pieces-external.json")
 WRAP = '<svg viewBox="0 0 45 45">%s</svg>'
-ID = re.compile(r'\s+id="[^"]*"')
 
 
-def prep(svg):
-    """Store every set as complete <svg> markup, with element ids stripped --
-    all 32 pieces live in one document, so ids would duplicate."""
+def prep(svg, name, code):
+    """Store every set as complete <svg> markup.
+
+    All 32 pieces end up in one document, so an id that appears in each piece
+    would resolve to whichever copy loaded first and paint the whole board
+    from it. Ids a piece actually refers to are namespaced per set and piece;
+    ids nothing refers to are dropped.
+    """
     if not svg.startswith("<svg"):
         svg = WRAP % re.sub(r"\s+", " ", svg).strip()
-    return ID.sub("", svg)
+    refs = sorted(set(re.findall(r"url\(#([^)]+)\)", svg)), key=len, reverse=True)
+    tag = "%s-%s-" % (name, code)
+    svg = re.sub(r'\s+id="([^"]+)"',
+                 lambda m: ' id="%s%s"' % (tag, m.group(1)) if m.group(1) in refs else "",
+                 svg)
+    for r in refs:
+        svg = svg.replace("url(#%s)" % r, "url(#%s%s)" % (tag, r))
+    return svg
 
 
 out = {
-    "cburnett": {k: prep(v) for k, v in chess.svg.PIECES.items()},
-    "round": {k: prep(v) for k, v in json.load(open(ROUND, encoding="utf-8")).items()},
+    "cburnett": {k: prep(v, "cburnett", k) for k, v in chess.svg.PIECES.items()},
+    "round": {k: prep(v, "round", k)
+              for k, v in json.load(open(ROUND, encoding="utf-8")).items()},
 }
-out.update({n: {k: prep(v) for k, v in s.items()}
+out.update({n: {k: prep(v, n, k) for k, v in s.items()}
             for n, s in json.load(open(EXTERNAL, encoding="utf-8")).items()})
+
 codes = set("prbnqkPRBNQK")
+seen = set()
 for name, s in out.items():
     assert set(s) == codes, "%s is missing %s" % (name, codes - set(s))
     for k, v in s.items():
-        assert "url(#" not in v, "%s %s references an id that would collide" % (name, k)
+        where = "%s %s" % (name, k)
+        ids = set(re.findall(r'id="([^"]+)"', v))
+        for r in set(re.findall(r"url\(#([^)]+)\)", v)):
+            assert r in ids, "%s refers to #%s, which it does not define" % (where, r)
+        clash = ids & seen
+        assert not clash, "%s reuses id %s" % (where, sorted(clash))
+        seen |= ids
 with open(OUT, "w", encoding="utf-8") as fh:
     json.dump(out, fh)
 print("written %s (%d sets, %d bytes)" % (OUT, len(out), os.path.getsize(OUT)))

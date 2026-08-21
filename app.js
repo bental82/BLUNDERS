@@ -28,7 +28,7 @@ var INKS={
   warm:   ["#f4e7d3","#382a20","#e5d5bd","#5f4a3a"],
   indigo: ["#f2f0fa","#443e5c","#e2dff0","#6a6289"]
 };
-var SETS={classic:"cburnett",round:"round",chessnut:"chessnut",
+var SETS={classic:"cburnett",round:"round",chessnut:"chessnut",merida:"merida",
           totoy:"totoy",staunty:"staunty",tatiana:"tatiana"};
 /* The Cburnett artwork carries its colours as both presentation attributes and
    inline styles, in three spellings, so inline style beats any CSS rule we
@@ -918,9 +918,10 @@ function prefRows(){
                     ["forest","Forest",BOARDS.forest[0],BOARDS.forest[1]],
                     ["ocean","Ocean",BOARDS.ocean[0],BOARDS.ocean[1]],
                     ["lavender","Lavender",BOARDS.lavender[0],BOARDS.lavender[1]]],C.board)+"</div>"+
-    '<div class="opt"><div class="lab"><b>Piece set</b><span>All six take the colour below.</span></div>'+
-    seg("set",[["classic","classic"],["round","round"],["chessnut","chessnut"],
-               ["staunty","staunty"],["tatiana","tatiana"],["totoy","totoy"]],C.set)+"</div>"+
+    '<div class="opt"><div class="lab"><b>Piece set</b><span>All seven take the colour below.</span></div>'+
+    seg("set",[["classic","classic"],["merida","merida"],["chessnut","chessnut"],
+               ["staunty","staunty"],["tatiana","tatiana"],["totoy","totoy"],
+               ["round","round"]],C.set)+"</div>"+
     '<div class="opt"><div class="lab"><b>Piece colour</b><span>Ink only; the shapes stay put.</span></div>'+
     swatch("pieces",[["classic","Black and white",INKS.classic[0],INKS.classic[1]],
                      ["warm","Warm",INKS.warm[0],INKS.warm[1]],

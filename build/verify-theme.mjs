@@ -119,7 +119,7 @@ console.log("\n3b. every piece set swaps the artwork, and every one takes ink");
 await pick("board", "slate"); await pick("pieces", "classic");
 const staunton = await look();
 const seen = new Map([["classic", staunton.shape]]);
-for (const t of ["round", "chessnut", "staunty", "tatiana", "totoy"]) {
+for (const t of ["round", "chessnut", "merida", "staunty", "tatiana", "totoy"]) {
   await pick("set", t);
   const l = await look();
   ok(t + ": the drawing changed", l.shape !== staunton.shape && l.shape.length > 40, l.shape.slice(0, 50));
@@ -179,6 +179,55 @@ await pick("set", "classic");
   ok("coordinates identical", l.coordLight === base.coordLight, l.coordLight);
   ok("ink identical", JSON.stringify(l.inks) === JSON.stringify(base.inks), { now: l.inks, was: base.inks });
   ok("artwork identical", l.shape === base.shape, null);
+}
+
+console.log("\n6. nothing bleeds over the edges of the board");
+{
+  // the closed rail is only translated off-screen; its shadow used to keep
+  // painting a dark band across the a-file
+  const phone = await browser.newContext({ viewport: { width: 390, height: 844 },
+    deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+  const pp = await phone.newPage();
+  pp.on("pageerror", (e) => errs.push("pageerror: " + e.message));
+  await pp.addInitScript(() => { window.SYNC = {}; });
+  await pp.goto(url);
+  await pp.waitForFunction(() => !!window.__CT, null, { timeout: 20000 });
+  await pp.evaluate(() => localStorage.clear());
+  await pp.reload();
+  await pp.waitForFunction(() => !!window.__CT, null, { timeout: 20000 });
+  await pp.click('[data-act="go"]');
+  await pp.waitForTimeout(250);
+  await settleOnBoard(pp);
+  ok("the rail is closed to begin with",
+     await pp.evaluate(() => document.getElementById("app").classList.contains("railoff")));
+
+  await pp.addStyleTag({ content: ".pc{display:none}" });   // squares only
+  await pp.waitForTimeout(120);
+  const shot = await pp.screenshot();
+  const px = await pp.evaluate(async (dataUrl) => {
+    const img = new Image();
+    await new Promise((r) => { img.onload = r; img.src = dataUrl; });
+    const c = document.createElement("canvas");
+    c.width = img.width; c.height = img.height;
+    const ctx = c.getContext("2d");
+    ctx.drawImage(img, 0, 0);
+    const bd = document.getElementById("board").getBoundingClientRect();
+    const dpr = img.width / innerWidth, sq = bd.width / 8;
+    const read = (f, r) => {
+      const d = ctx.getImageData(Math.round((bd.left + (f + 0.5) * sq) * dpr),
+                                 Math.round((bd.top + (r + 0.5) * sq) * dpr), 1, 1).data;
+      return [d[0], d[1], d[2]];
+    };
+    const light = [], dark = [];
+    for (const f of [0, 2, 4, 6]) { light.push(read(f, 1)); dark.push(read(f, 2)); }
+    return { light, dark };
+  }, "data:image/png;base64," + shot.toString("base64"));
+  const same = (x, y) => x.every((v, i) => Math.abs(v - y[i]) <= 1);
+  const uniform = (row) => row.every((c) => same(c, row[0]));
+  ok("every light square down the rank is the same colour", uniform(px.light), px.light);
+  ok("and every dark one", uniform(px.dark), px.dark);
+  ok("the two square colours are actually different", !same(px.light[0], px.dark[0]), px);
+  await phone.close();
 }
 
 console.log("\njs errors   " + errs.length);

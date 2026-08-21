@@ -5,11 +5,14 @@
 
 Sets come from lichess (lichess-org/lila, public/piece/<name>/), whose
 COPYING.md documents a licence for every one. Only sets that are structurally
-safe to inline are taken: no element ids (32 pieces share one document, so
-ids would collide), no gradients, no <style> blocks.
+safe to inline are taken: no <style> blocks, and no colour that cannot be
+reduced to the four tokens below. Element ids are allowed -- build/pieces.py
+namespaces them per piece, since all 32 share one document -- but a set whose
+ids are not self-contained is rejected there.
 
   chessnut  Alexis Luengas          Apache 2.0
   totoy     Kosal Sen               CC BY 4.0
+  merida    Armando Hernandez Marroquin  GPLv2+
   staunty   sadsnake1               CC BY-NC-SA 4.0
   tatiana   sadsnake1               CC BY-NC-SA 4.0
 
@@ -26,7 +29,7 @@ import json, os, re, urllib.request
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, "build", "pieces-external.json")
 BASE = "https://raw.githubusercontent.com/lichess-org/lila/master/public/piece/"
-SETS = ["chessnut", "totoy", "staunty", "tatiana"]
+SETS = ["chessnut", "totoy", "staunty", "tatiana", "merida"]
 CODES = {"P": "wP", "N": "wN", "B": "wB", "R": "wR", "Q": "wQ", "K": "wK",
          "p": "bP", "n": "bN", "b": "bB", "r": "bR", "q": "bQ", "k": "bK"}
 
@@ -82,7 +85,7 @@ for name in SETS:
         # a shape with no fill of its own paints black; make that explicit so it recolours
         if not re.match(r"<svg[^>]*\sfill=", s):
             s = s.replace("<svg", '<svg fill="' + DARK + '"', 1)
-        assert "id=" not in s and "Gradient" not in s, name + " " + c + " is not safe to inline"
+        assert "<style" not in s, name + " " + c + " carries a <style> block"
         pieces[c] = s
     out[name] = pieces
     print("%-9s %2d pieces, %d colours -> %s" % (
