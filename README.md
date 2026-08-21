@@ -24,6 +24,8 @@ it's a board-vision course, where the arrows the author drew and the clock you'r
   on the board move by move with his commentary. Every side line stays explorable
   afterwards as clickable move chips.
 - **Quiz cold, teach when you ask, then re-ask** the same position before moving on.
+- **Looks the way you want.** Five board colours and three piece inks in Settings. The
+  default is the original slate and the standard black-and-white Cburnett set.
 
 348 items, 835 quiz moves, in the author's order, lessons in place.
 
@@ -99,6 +101,7 @@ build/body.html       markup shared by both builds (edit index.html, not this)
 build/verify.mjs      walks the whole course through the real app
 build/verify-flow.mjs checks the clock gate and that a miss withholds the move
 build/verify-redeem.mjs checks how a red exercise goes green again
+build/verify-theme.mjs  checks the colour settings, and can write board PNGs
 build/verify-sync.mjs drives two browsers against a mock endpoint
 db/schema.sql         the Supabase table, to paste into the SQL editor
 source/*.pgn          the Chessable export
@@ -163,6 +166,22 @@ that can improve cannot be merged with worst-of any more, and two devices syncin
 different orders would disagree; an append-only list of attempts is still grow-only, so
 the union stays order-independent. Saves from the previous build are read as a single
 attempt of unknown age, so every already-red move is redeemable on the next session.
+
+## Board and piece colours
+
+Settings carries a **Board** row (Slate, Walnut, Forest, Ocean, Dusk) and a **Pieces** row
+(Classic, Warm, Cool), both shown as the colours themselves rather than as words. Slate
+and Classic are the original look and remain the default; picking them again returns the
+board pixel-for-pixel to where it started.
+
+Squares and coordinate labels are CSS variables, so they repaint for free. The pieces
+cannot be: the Cburnett artwork carries its colours as presentation attributes *and*
+inline styles, in three different spellings of white, and an inline style beats any rule
+a stylesheet could apply. So `svgFor()` substitutes the literals when the piece is drawn,
+and a change of ink redraws the pieces on the board. Shapes never change — only ink.
+
+Both settings live in `C` alongside the clock and the review mode, so they sync across
+devices with everything else.
 
 ## Cross-device sync
 
@@ -242,6 +261,16 @@ two devices agreeing after merging attempts, and old saves migrating.
 
 ```sh
 node build/verify-redeem.mjs http://localhost:8000/
+```
+
+`build/verify-theme.mjs` covers the colour settings: that the default is byte-identical to
+the look before the setting existed, that each theme repaints squares, coordinates and
+the pieces already on the board, that the choice survives a reload, and that returning to
+the defaults really returns. Pass a directory as a second argument and it writes one PNG
+of the board per theme.
+
+```sh
+node build/verify-theme.mjs http://localhost:8000/ /tmp/shots
 ```
 
 `build/verify-sync.mjs` covers the sync layer instead. It stands up a mock endpoint

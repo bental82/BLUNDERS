@@ -3,7 +3,8 @@
   --line:#2b333e; --line2:#3a4553;
   --tx:#e7ebf0; --tx2:#a6b0bd; --tx3:#6e7987;
   --amber:#e3b341; --green:#3fb950; --red:#e5484d; --blue:#4d8ff5;
-  --lsq:#d6dae0; --dsq:#78838f;
+  --lsq:#d6dae0; --dsq:#78838f; --lco:#5d6672; --dco:#e6eaee;
+  --pcl:#ffffff; --pcd:#000000;
   --radius:10px;
   --sq:64px;
   --ff:"Archivo",system-ui,-apple-system,"Segoe UI",sans-serif;
@@ -101,7 +102,7 @@ main{flex:1;display:flex;flex-direction:column;min-width:0;overflow:hidden}
 .sq.err::after{content:"";position:absolute;inset:0;background:#e5484d59}
 .sq .co{position:absolute;font-family:var(--fm);font-size:9px;opacity:.55;pointer-events:none}
 .sq .co.f{right:2.5px;bottom:0px} .sq .co.r{left:2.5px;top:0px}
-.sq.l .co{color:#5d6672} .sq.d .co{color:#e6eaee}
+.sq.l .co{color:var(--lco)} .sq.d .co{color:var(--dco)}
 #app.nocoords .co{display:none}
 .dest{position:absolute;width:12.5%;height:12.5%;pointer-events:none;display:grid;place-items:center}
 .dest i{width:28%;height:28%;border-radius:50%;background:#0f172a3d}
@@ -210,6 +211,10 @@ main{flex:1;display:flex;flex-direction:column;min-width:0;overflow:hidden}
 .seg{display:flex;background:var(--surface2);border:1px solid var(--line);border-radius:8px;padding:2px;gap:2px}
 .seg button{padding:4px 10px;border-radius:6px;font-family:var(--fm);font-size:11.5px;color:var(--tx2)}
 .seg button.on{background:var(--amber);color:#1b1405;font-weight:600}
+.seg.sw button{padding:3px}
+.seg.sw button i{display:block;width:26px;height:20px;border-radius:4px;
+  box-shadow:inset 0 0 0 1px #00000038}
+.seg.sw button.on{background:var(--amber)}
 .cardfoot{display:flex;gap:9px;margin-top:22px}
 .stat{display:flex;gap:22px;margin:16px 0 4px}
 .stat div{font-family:var(--fm)}
