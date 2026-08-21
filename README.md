@@ -24,8 +24,9 @@ it's a board-vision course, where the arrows the author drew and the clock you'r
   on the board move by move with his commentary. Every side line stays explorable
   afterwards as clickable move chips.
 - **Quiz cold, teach when you ask, then re-ask** the same position before moving on.
-- **Looks the way you want.** Five board colours and three piece inks in Settings. The
-  default is the original slate and the standard black-and-white Cburnett set.
+- **Looks the way you want.** Five board colours, six piece sets and three piece inks in
+  Settings, in any combination. The default is the original slate and the standard
+  black-and-white Cburnett set.
 
 348 items, 835 quiz moves, in the author's order, lessons in place.
 
@@ -79,6 +80,13 @@ python3 build/extract.py     # data/course.json — the course itself
 python3 build/bundle.py      # dist/clamp-trainer.html
 ```
 
+The piece sources only need regenerating if you change a set:
+
+```sh
+python3 build/pieces-round.py build/pieces-round.json   # redraw the local set
+python3 build/pieces-fetch.py                           # re-pull the lichess sets
+```
+
 `build/extract.py` is where the real work happens. For each game it decides which side
 the student plays (the author annotates the student's moves — side lines hang off them
 and `!` marks them — so scoring both parities picks it out), splits plies into quiz moves
@@ -101,7 +109,9 @@ build/body.html       markup shared by both builds (edit index.html, not this)
 build/verify.mjs      walks the whole course through the real app
 build/verify-flow.mjs checks the clock gate and that a miss withholds the move
 build/verify-redeem.mjs checks how a red exercise goes green again
-build/verify-theme.mjs  checks the colour settings, and can write board PNGs
+build/verify-theme.mjs  checks the appearance settings, and can write board PNGs
+build/pieces-round.py the local piece set, drawn in code
+build/pieces-fetch.py fetches and normalises the lichess sets
 build/verify-sync.mjs drives two browsers against a mock endpoint
 db/schema.sql         the Supabase table, to paste into the SQL editor
 source/*.pgn          the Chessable export
@@ -167,21 +177,46 @@ different orders would disagree; an append-only list of attempts is still grow-o
 the union stays order-independent. Saves from the previous build are read as a single
 attempt of unknown age, so every already-red move is redeemable on the next session.
 
-## Board and piece colours
+## Board and piece appearance
 
-Settings carries a **Board** row (Slate, Walnut, Forest, Ocean, Dusk) and a **Pieces** row
-(Classic, Warm, Cool), both shown as the colours themselves rather than as words. Slate
-and Classic are the original look and remain the default; picking them again returns the
-board pixel-for-pixel to where it started.
+Three independent rows in Settings:
+
+| | |
+|---|---|
+| **Board** | Slate, Walnut, Forest, Ocean, Lavender — shown as the colours themselves |
+| **Piece set** | classic, round, chessnut, staunty, tatiana, totoy |
+| **Piece colour** | Black and white, Warm, Indigo |
+
+Slate + classic + black-and-white is the original look and stays the default; picking
+them again returns the board pixel-for-pixel to where it started, which the tests assert
+rather than assume.
 
 Squares and coordinate labels are CSS variables, so they repaint for free. The pieces
-cannot be: the Cburnett artwork carries its colours as presentation attributes *and*
-inline styles, in three different spellings of white, and an inline style beats any rule
-a stylesheet could apply. So `svgFor()` substitutes the literals when the piece is drawn,
-and a change of ink redraws the pieces on the board. Shapes never change — only ink.
+cannot be: the artwork carries its colours as presentation attributes *and* inline
+styles, in several spellings, and an inline style beats any rule a stylesheet could
+apply. So every set is normalised at build time onto four tokens — `#fff` and `#ececec`
+for the light piece, `#000` and `#3c3c3c` for the dark one — and `svgFor()` substitutes
+those when a piece is drawn. One substitution therefore recolours all six sets, and a
+change of set or ink redraws what is on the board.
 
-Both settings live in `C` alongside the clock and the review mode, so they sync across
-devices with everything else.
+All three settings live in `C` alongside the clock and the review mode, so they sync
+across devices with everything else.
+
+### Where the sets come from
+
+`build/pieces.py` merges three sources into `data/pieces.json`, keyed by set name:
+
+- **classic** — Cburnett's Staunton rendering, as shipped inside python-chess.
+- **round** — drawn for this repo by `build/pieces-round.py`: flat parts with a heavy
+  outline. Black pieces would be featureless silhouettes at that weight, so they get
+  light seam lines at the joints instead.
+- **chessnut, staunty, tatiana, totoy** — pulled from lichess by
+  `build/pieces-fetch.py`, whose header records each licence.
+
+Only sets that are safe to inline are taken. All 32 pieces live in one document, so
+`pieces.py` strips element ids and refuses any set that resolves a colour through
+`url(#…)` — a gradient id would otherwise collide across pieces and paint the whole
+board from whichever definition happened to come first.
 
 ## Cross-device sync
 
@@ -263,10 +298,11 @@ two devices agreeing after merging attempts, and old saves migrating.
 node build/verify-redeem.mjs http://localhost:8000/
 ```
 
-`build/verify-theme.mjs` covers the colour settings: that the default is byte-identical to
-the look before the setting existed, that each theme repaints squares, coordinates and
-the pieces already on the board, that the choice survives a reload, and that returning to
-the defaults really returns. Pass a directory as a second argument and it writes one PNG
+`build/verify-theme.mjs` covers the appearance settings: that the default is identical to
+the look before the settings existed, that each board theme repaints squares, coordinates
+and the pieces already on the board, that all six sets draw differently from one another
+and every one of them still answers to the ink setting, that the choices survive a
+reload, and that returning to the defaults really returns. Pass a directory as a second argument and it writes one PNG
 of the board per theme.
 
 ```sh
@@ -286,4 +322,19 @@ node build/verify-sync.mjs
 ## Credits
 
 Course content © CM Can Kabadayı, *Preventing Blunders in Chess* (Chessable).
-Piece graphics by Cburnett, CC BY-SA 3.0, via python-chess.
+
+Piece sets:
+
+| set | by | licence |
+|---|---|---|
+| classic | [Colin M.L. Burnett](https://en.wikipedia.org/wiki/User:Cburnett), via python-chess | CC BY-SA 3.0 |
+| round | drawn for this repo (`build/pieces-round.py`) | — |
+| chessnut | [Alexis Luengas](https://github.com/LexLuengas/chessnut-pieces) | Apache 2.0 |
+| totoy | Kosal Sen | CC BY 4.0 |
+| staunty | sadsnake1 | CC BY-NC-SA 4.0 |
+| tatiana | sadsnake1 | CC BY-NC-SA 4.0 |
+
+The four fetched sets come from [lichess](https://github.com/lichess-org/lila/tree/master/public/piece),
+whose `COPYING.md` is the source for the attributions above. `staunty` and `tatiana` are
+non-commercial-only, which this private trainer is; the rest carry no such restriction.
+Board colours were chosen for this repo.

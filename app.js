@@ -13,30 +13,37 @@ function fenTurn(f){return f.split(" ")[1]}
 var COL={R:"#e5484d",G:"#3fb950",B:"#4d8ff5",Y:"#e3b341"};
 /* Board squares and piece ink. [light sq, dark sq, coord on light, coord on dark] */
 var BOARDS={
-  slate: ["#d6dae0","#78838f","#5d6672","#e6eaee"],
-  walnut:["#e9d5b6","#9c6b43","#7a5433","#f4e6d2"],
-  forest:["#e9edcc","#6f8f57","#5b6f45","#eef3dd"],
-  ocean: ["#dbe6ee","#6b8ba8","#56708a","#eaf2f8"],
-  dusk:  ["#e3dcef","#7d6f9e","#635782","#efeaf7"]
+  slate:   ["#d6dae0","#78838f","#5d6672","#e6eaee"],
+  walnut:  ["#e9d5b6","#9c6b43","#7a5433","#f4e6d2"],
+  forest:  ["#e9edcc","#6f8f57","#5b6f45","#eef3dd"],
+  ocean:   ["#dbe6ee","#6b8ba8","#56708a","#eaf2f8"],
+  lavender:["#d5d3e6","#a8a4c6","#6b6688","#f0eef8"]
 };
-/* [light piece, dark piece, the softer light the artwork shades with] */
+/* [light, dark, light shade, dark shade]. Three inks that actually differ on
+   a board -- an off-white against a near-black is the same picture as white
+   against black at square size. Every set is normalised to these four tokens
+   at build time, so one substitution recolours all of them. */
 var INKS={
-  classic:["#ffffff","#000000","#ececec"],
-  warm:   ["#f4e7d3","#382a20","#e5d5bd"],
-  cool:   ["#eef3f8","#16202b","#dde6ef"]
+  classic:["#ffffff","#000000","#ececec","#3c3c3c"],
+  warm:   ["#f4e7d3","#382a20","#e5d5bd","#5f4a3a"],
+  indigo: ["#f2f0fa","#443e5c","#e2dff0","#6a6289"]
 };
+var SETS={classic:"cburnett",round:"round",chessnut:"chessnut",
+          totoy:"totoy",staunty:"staunty",tatiana:"tatiana"};
 /* The Cburnett artwork carries its colours as both presentation attributes and
    inline styles, in three spellings, so inline style beats any CSS rule we
    could write. Substituting the literals is the one approach that reaches all
    of them, and it costs a string replace per piece. */
 function svgFor(code){
   var ink=INKS[C.pieces]||INKS.classic;
-  return '<svg viewBox="0 0 45 45">'+
-    PIECES[code].replace(/#(?:fff(?:fff)?|ececec|000(?:000)?)\b/gi,function(m){
+  var set=PIECES[SETS[C.set]||"cburnett"]||PIECES.cburnett;
+  return (set[code]||"").replace(
+    /#(?:fff(?:fff)?|ececec|000(?:000)?|3c3c3c)\b/gi,function(m){
       m=m.toLowerCase();
       if(m==="#ececec")return ink[2];
+      if(m==="#3c3c3c")return ink[3];
       return (m==="#fff"||m==="#ffffff")?ink[0]:ink[1];
-    })+"</svg>";
+    });
 }
 var SVGNS="http://www.w3.org/2000/svg";
 function d(ms){return Math.round(ms*(window.__SPEED||1))}
@@ -250,7 +257,7 @@ var KEY="pbc.trainer.v1";
    move go green again without breaking the cross-device merge: appending is
    grow-only, overwriting a verdict would not be. */
 var P={att:{},read:{},cursor:0},
-    C={secs:20,auto:0,coords:1,mode:"all",board:"slate",pieces:"classic"};
+    C={secs:20,auto:0,coords:1,mode:"all",board:"slate",set:"classic",pieces:"classic"};
 var CODE={clean:0,hint:1,missed:2},NAME=["clean","hint","missed"],ATTCAP=8;
 var REDEEM_MS=6*3600*1000;  /* and a later local day; see redeems() */
 var G=0,T=0;  /* reset generation; ms of the last deliberate local write */
@@ -258,7 +265,8 @@ var G=0,T=0;  /* reset generation; ms of the last deliberate local write */
    would make a laptop opened on Monday outrank the phone you actually worked
    on, and you would lose your place; so nothing stamps T until boot is done. */
 var booting=true;
-function defaults(){return {secs:20,auto:0,coords:1,mode:"all",board:"slate",pieces:"classic"}}
+function defaults(){return {secs:20,auto:0,coords:1,mode:"all",board:"slate",
+                            set:"classic",pieces:"classic"}}
 /* Older saves (and any device still on the previous build) carry P.res, a
    single verdict per move. Read it as one attempt of unknown age, which makes
    every old red move redeemable on the next session rather than needing to be
@@ -881,7 +889,7 @@ function renderTally(){
 
 /* ============================== overlays ============================== */
 var veilNow=null;
-var TEXTPREF={mode:1,board:1,pieces:1};   /* everything else is numeric */
+var TEXTPREF={mode:1,board:1,pieces:1,set:1};   /* everything else is numeric */
 /* Same behaviour as seg(), shown as the two colours themselves. */
 function swatch(name,opts,val){
   return '<div class="seg sw" data-seg="'+name+'">'+opts.map(function(o){
@@ -909,11 +917,14 @@ function prefRows(){
                     ["walnut","Walnut",BOARDS.walnut[0],BOARDS.walnut[1]],
                     ["forest","Forest",BOARDS.forest[0],BOARDS.forest[1]],
                     ["ocean","Ocean",BOARDS.ocean[0],BOARDS.ocean[1]],
-                    ["dusk","Dusk",BOARDS.dusk[0],BOARDS.dusk[1]]],C.board)+"</div>"+
-    '<div class="opt"><div class="lab"><b>Pieces</b><span>Ink, not shape \u2014 the Cburnett set throughout.</span></div>'+
-    swatch("pieces",[["classic","Classic",INKS.classic[0],INKS.classic[1]],
+                    ["lavender","Lavender",BOARDS.lavender[0],BOARDS.lavender[1]]],C.board)+"</div>"+
+    '<div class="opt"><div class="lab"><b>Piece set</b><span>All six take the colour below.</span></div>'+
+    seg("set",[["classic","classic"],["round","round"],["chessnut","chessnut"],
+               ["staunty","staunty"],["tatiana","tatiana"],["totoy","totoy"]],C.set)+"</div>"+
+    '<div class="opt"><div class="lab"><b>Piece colour</b><span>Ink only; the shapes stay put.</span></div>'+
+    swatch("pieces",[["classic","Black and white",INKS.classic[0],INKS.classic[1]],
                      ["warm","Warm",INKS.warm[0],INKS.warm[1]],
-                     ["cool","Cool",INKS.cool[0],INKS.cool[1]]],C.pieces)+"</div>";
+                     ["indigo","Indigo",INKS.indigo[0],INKS.indigo[1]]],C.pieces)+"</div>";
 }
 function overlayStart(){
   veilNow="start";
@@ -986,8 +997,8 @@ function applyPrefs(){
   r.setProperty("--pcl",ink[0]);r.setProperty("--pcd",ink[1]);
   /* Squares are variables and repaint themselves; pieces carry their colours
      inside the artwork, so only redraw them when the ink actually changed. */
-  if(inkNow!==C.pieces){
-    inkNow=C.pieces;
+  if(inkNow!==C.pieces+"/"+C.set){
+    inkNow=C.pieces+"/"+C.set;
     if(typeof board!=="undefined"&&board)
       for(var k in board.pieces)board.pieces[k].el.innerHTML=svgFor(board.pieces[k].code);
   }

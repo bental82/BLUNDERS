@@ -71,6 +71,8 @@ const look = () => page.evaluate(() => {
     inks: [...inks].sort(),
     board: window.__CT.state().C.board,
     pieceTheme: window.__CT.state().C.pieces,
+    set: window.__CT.state().C.set,
+    shape: (document.querySelector('.pc svg') || {}).innerHTML || "",
   };
 });
 const pick = async (which, v) => {
@@ -85,14 +87,15 @@ const base = await look();
 ok("light squares are still #d6dae0", base.lsq === "#d6dae0", base.lsq);
 ok("dark squares are still #78838f", base.dsq === "#78838f", base.dsq);
 ok("board setting defaults to slate", base.board === "slate", base.board);
-ok("pieces default to classic", base.pieceTheme === "classic", base.pieceTheme);
+ok("piece colour defaults to classic", base.pieceTheme === "classic", base.pieceTheme);
+ok("piece set defaults to classic", base.set === "classic", base.set);
 ok("pieces are on the board", base.pieces > 0, base.pieces);
 ok("piece ink is still pure black and white",
    base.inks.includes("#ffffff") && base.inks.includes("#000000"), base.inks);
 if (shots) await (await page.$("#board")).screenshot({ path: shots + "/board-slate-classic.png" });
 
 console.log("\n2. each board theme repaints squares and coordinates");
-for (const t of ["walnut", "forest", "ocean", "dusk"]) {
+for (const t of ["walnut", "forest", "ocean", "lavender"]) {
   await pick("board", t);
   const l = await look();
   ok(t + ": squares changed", l.lightBg !== base.lightBg && l.darkBg !== base.darkBg, l);
@@ -103,7 +106,7 @@ for (const t of ["walnut", "forest", "ocean", "dusk"]) {
 
 console.log("\n3. piece ink repaints pieces already on the board");
 await pick("board", "slate");
-for (const t of ["warm", "cool"]) {
+for (const t of ["warm", "indigo"]) {
   await pick("pieces", t);
   const l = await look();
   ok(t + ": the old black/white ink is gone",
@@ -112,16 +115,46 @@ for (const t of ["warm", "cool"]) {
   ok(t + ": setting stored", l.pieceTheme === t, l.pieceTheme);
   if (shots) await (await page.$("#board")).screenshot({ path: shots + "/board-slate-" + t + ".png" });
 }
+console.log("\n3b. every piece set swaps the artwork, and every one takes ink");
+await pick("board", "slate"); await pick("pieces", "classic");
+const staunton = await look();
+const seen = new Map([["classic", staunton.shape]]);
+for (const t of ["round", "chessnut", "staunty", "tatiana", "totoy"]) {
+  await pick("set", t);
+  const l = await look();
+  ok(t + ": the drawing changed", l.shape !== staunton.shape && l.shape.length > 40, l.shape.slice(0, 50));
+  ok(t + ": distinct from every other set", ![...seen.values()].includes(l.shape), t);
+  ok(t + ": all pieces present", l.pieces === base.pieces, l.pieces);
+  ok(t + ": set stored", l.set === t, l.set);
+  seen.set(t, l.shape);
+  await pick("pieces", "indigo");
+  const j = await look();
+  ok(t + ": recolours with the ink setting",
+     !j.inks.includes("#000000") && !j.inks.includes("#ffffff"), j.inks);
+  await pick("pieces", "classic");
+}
+await pick("set", "classic");
+{
+  const l = await look();
+  ok("switching back restores the original artwork", l.shape === staunton.shape, null);
+}
+
 if (shots) {
   await pick("board", "walnut"); await pick("pieces", "warm");
   await (await page.$("#board")).screenshot({ path: shots + "/board-walnut-warm.png" });
-  await pick("board", "forest"); await pick("pieces", "cool");
-  await (await page.$("#board")).screenshot({ path: shots + "/board-forest-cool.png" });
+  await pick("board", "lavender"); await pick("set", "round"); await pick("pieces", "indigo");
+  await (await page.$("#board")).screenshot({ path: shots + "/board-lavender-round-indigo.png" });
+  await pick("board", "forest"); await pick("pieces", "classic");
+  await (await page.$("#board")).screenshot({ path: shots + "/board-forest-round.png" });
+  await pick("board", "slate"); await pick("pieces", "warm");
+  await (await page.$("#board")).screenshot({ path: shots + "/board-slate-round-warm.png" });
+  await pick("set", "classic"); await pick("pieces", "classic");
 }
 
 console.log("\n4. the choice survives a reload");
 await pick("board", "ocean");
 await pick("pieces", "warm");
+await pick("set", "round");
 await page.reload();
 await page.waitForFunction(() => !!window.__CT, null, { timeout: 20000 });
 await page.click('[data-act="go"]');
@@ -130,6 +163,7 @@ await settleOnBoard(page);
 {
   const l = await look();
   ok("board theme restored", l.board === "ocean" && l.lsq === "#dbe6ee", l);
+  ok("piece set restored", l.set === "round", l.set);
   ok("piece theme restored", l.pieceTheme === "warm", l.pieceTheme);
   ok("and it actually painted, not just stored",
      !l.inks.includes("#000000") && l.lightBg !== base.lightBg, l);
@@ -138,11 +172,13 @@ await settleOnBoard(page);
 console.log("\n5. going back to the defaults really goes back");
 await pick("board", "slate");
 await pick("pieces", "classic");
+await pick("set", "classic");
 {
   const l = await look();
   ok("squares identical to the original", l.lightBg === base.lightBg && l.darkBg === base.darkBg, l);
   ok("coordinates identical", l.coordLight === base.coordLight, l.coordLight);
   ok("ink identical", JSON.stringify(l.inks) === JSON.stringify(base.inks), { now: l.inks, was: base.inks });
+  ok("artwork identical", l.shape === base.shape, null);
 }
 
 console.log("\njs errors   " + errs.length);
