@@ -344,7 +344,7 @@ function resetAll(){
 }
 
 var S={order:[],k:0,ply:0,phase:"idle",failed:false,hinted:false,parts:[],
-       pendAnn:null,explore:null,trapAlt:null,trapK:0,timer:null,why:""};
+       pendAnn:null,explore:null,trapAlt:null,trapK:0,timer:null,why:"",ready4:-1};
 var board=new Board($("board"));
 
 function item(){return DATA[S.order[S.k]]}
@@ -441,12 +441,18 @@ function startTimer(){
   },80);
 }
 function stopTimer(){if(S.timer){clearInterval(S.timer);S.timer=null}}
-function timeUp(){reveal(true)}
+function timeUp(){
+  if(S.phase!=="quiz")return;
+  var p=item().plies[S.ply];
+  board.locked=true;board.legal=null;board.select(-1);
+  mark(p,"missed");missedMove(p,"Out of time.");
+}
 
 /* ============================== flow ============================== */
 function loadItem(){
   stopTimer();board.locked=true;board.legal=null;board.annotate([],[]);
   S.ply=0;S.parts=[];S.failed=false;S.hinted=false;S.explore=null;S.trapAlt=null;S.pendAnn=null;
+  S.ready4=-1;
   var it=item();
   P.cursor=S.order[S.k];save();
   $("crumbC").textContent=it.chap.replace(/^\d+\.\s*/,"");
@@ -491,11 +497,26 @@ function step(){
   setTimeout(step,d(p.t?880:540));
 }
 function ask(p){
-  S.phase="quiz";S.explore=null;S.trapAlt=null;
+  S.explore=null;S.trapAlt=null;
   board.annotate([],[]);
-  board.legal=p.legal.split(" ");board.locked=false;board.turn=p.side;
+  board.legal=p.legal.split(" ");board.turn=p.side;
   board.onPick=onPick;
   $("turnBadge").textContent=(p.side==="w"?"White":"Black")+" to move";
+  /* The position arrives with the author's setup text still unread. Starting
+     the clock against that text means being timed on reading, so when there
+     is something to read the clock is loaded but held until you say go. Only
+     once per ply -- a retry does not make you read it again. */
+  if(budget()&&S.parts.length&&S.ready4!==S.ply){
+    S.phase="ready";board.locked=true;
+    $("timerFill").style.transform="scaleX(1)";$("timer").className="timer";
+    renderPanel();return;
+  }
+  S.phase="quiz";board.locked=false;
+  renderPanel();startTimer();
+}
+function begin(){
+  if(S.phase!=="ready")return;
+  S.ready4=S.ply;S.phase="quiz";board.locked=false;
   renderPanel();startTimer();
 }
 function onPick(uci){
@@ -510,7 +531,7 @@ function onPick(uci){
   board.el.classList.add("shake");board.sqs[to].classList.add("err");
   setTimeout(function(){board.el.classList.remove("shake")},340);
   setTimeout(function(){board.sqs[to].classList.remove("err");
-    teach(p,"That is not it.")},d(640));
+    missedMove(p,"That is not it.")},d(640));
 }
 function good(p){
   board.move(p.u);
@@ -524,12 +545,23 @@ function good(p){
   if(quiet){S.parts=[];S.ply++;S.phase="idle";setTimeout(step,d(360));return}
   if(C.auto)setTimeout(function(){if(S.phase==="solved")next()},C.auto*1000);
 }
-function reveal(fromTimer){
-  if(S.phase!=="quiz")return;
+/* The only path to the answer, and you have to ask for it. */
+function reveal(){
+  if(S.phase!=="quiz"&&S.phase!=="missed")return;
   var it=item(),p=it.plies[S.ply];
+  var why=(S.phase==="missed"&&S.why)?S.why:"Shown.";
   board.locked=true;board.legal=null;board.select(-1);stopTimer();
   mark(p,"missed");
-  teach(p,fromTimer?"Out of time.":"Shown.");
+  teach(p,why);
+}
+/* Wrong, or out of time: say so, put the position back, and stop there. */
+function missedMove(p,why){
+  S.phase="missed";S.failed=true;S.why=why;
+  stopTimer();
+  board.set(p.f);board.annotate([],[]);
+  board.locked=true;board.legal=null;
+  $("timerFill").style.transform="scaleX(1)";$("timer").className="timer off";
+  renderPanel();
 }
 function teach(p,why){
   S.phase="taught";S.failed=true;S.why=why;
@@ -565,6 +597,8 @@ function itemDone(){
   if(C.auto)setTimeout(function(){if(S.phase==="done")next()},C.auto*1000);
 }
 function next(){
+  if(S.phase==="ready"){begin();return}
+  if(S.phase==="missed"){retry();return}
   if(S.phase==="taught"){retry();return}
   if(S.phase==="trap"){teach(item().plies[S.ply],"You walked into it.");return}
   if(S.phase==="solved"){S.parts=[];S.ply++;S.phase="idle";step();return}
@@ -594,8 +628,10 @@ function renderPanel(){
   var it=item();if(it.kind!=="pos")return;
   var p=it.plies[Math.min(S.ply,it.plies.length-1)],h="";
   var ctx=S.parts.map(function(t){return prose(t)}).join("");
-  if(S.phase==="intro"||S.phase==="quiz"||S.phase==="idle"){
+  if(S.phase==="intro"||S.phase==="quiz"||S.phase==="idle"||S.phase==="ready"){
     if(ctx)h+='<div class="ask">'+ctx+"</div>";
+    if(S.phase==="ready")
+      h+='<div class="hintline">Read this first \u2014 the clock starts when you do.</div>';
     if(S.phase==="quiz"){
       if(!ctx)h+='<div class="ask">'+prose(defaultAsk(it,p))+"</div>";
       if(S.hinted)h+='<div class="hintline">The circled piece is the one that moves.</div>';
@@ -613,6 +649,12 @@ function renderPanel(){
     h+='<div class="prose">'+a.line.slice(0,S.trapK+1).map(function(x){
         return x.t?prose(x.t):""}).join("")+"</div>";
     h+=lineBar(a,S.trapK,"trap");
+  } else if(S.phase==="missed"){
+    var tmo2=(S.why==="Out of time.");
+    h+='<div class="verdict '+(tmo2?"v-nu":"v-no")+'"><span class="mk">'+
+       (tmo2?ICO.nu:ICO.no)+"</span>"+esc(S.why||"")+"</div>";
+    if(ctx)h+='<div class="prose" style="opacity:.6">'+ctx+"</div>";
+    h+='<div class="hintline">Still hidden. Try it again, or ask to be shown.</div>';
   } else if(S.phase==="taught"){
     var tmo=(S.why==="Out of time.");
     h+='<div class="verdict '+(tmo?"v-nu":"v-no")+'"><span class="mk">'+
@@ -704,17 +746,18 @@ function wirePanel(){
     })});
 }
 function buttons(){
-  var q=(S.phase==="quiz");
+  var q=(S.phase==="quiz"),rd=(S.phase==="ready"),ms=(S.phase==="missed");
   $("bHint").style.display=q?"":"none";
-  $("bReveal").style.display=q?"":"none";
+  $("bReveal").style.display=(q||ms)?"":"none";
   $("bHint").disabled=S.hinted;
-  $("bReveal").textContent=S.hinted?"Show me":"Give up";
+  $("bReveal").textContent=(ms||S.hinted)?"Show me":"Give up";
   var n=$("bNext");
   n.className="btn"+(q?"":" pri");
-  n.innerHTML=(S.phase==="taught"?"Try again":
+  n.innerHTML=(rd?"Start":
+              ((ms||S.phase==="taught")?"Try again":
               (S.phase==="trap"?"Show the right move":
-              (q?"Skip":"Next")))+' <kbd>↵</kbd>';
-  $("turnBadge").style.display=q?"":"none";
+              (q?"Skip":"Next"))))+' <kbd>↵</kbd>';
+  $("turnBadge").style.display=(q||rd||ms)?"":"none";
 }
 function renderTally(){
   var ok=0,no=0,tot=0;
@@ -825,12 +868,14 @@ window.addEventListener("resize",fit);
 document.addEventListener("keydown",function(e){
   if($("veil").style.display!=="none"){if(e.key==="Escape")closeVeil();return}
   if(e.key==="Enter"){e.preventDefault();
+    if(S.phase==="ready"){begin();return}
     if(S.phase==="lesson")skip();else if(S.phase==="quiz")skip();else next();return}
+  if(e.key===" "&&S.phase==="ready"){e.preventDefault();begin();return}
   if(e.key==="ArrowRight"){e.preventDefault();skip();return}
   if(e.key==="ArrowLeft"){e.preventDefault();prev();return}
   var k=e.key.toLowerCase();
   if(k==="h")hint();
-  else if(k==="r")reveal(false);
+  else if(k==="r")reveal();
   else if(k==="f"){board.flip=!board.flip;board.layout()}
   else if(k==="c"){$("app").classList.toggle("railoff");setTimeout(fit,250)}
 });
@@ -839,8 +884,10 @@ $("btnRail").addEventListener("click",function(){$("app").classList.toggle("rail
   setTimeout(fit,250)});
 $("btnCfg").addEventListener("click",overlaySettings);
 $("bHint").addEventListener("click",hint);
-$("bReveal").addEventListener("click",function(){reveal(false)});
-$("bNext").addEventListener("click",function(){if(S.phase==="quiz")skip();else next()});
+$("bReveal").addEventListener("click",function(){reveal()});
+$("bNext").addEventListener("click",function(){
+  if(S.phase==="ready"){begin();return}
+  if(S.phase==="quiz")skip();else next()});
 $("bPrev").addEventListener("click",prev);
 $("bNext2").addEventListener("click",skip);
 $("bPrev2").addEventListener("click",prev);
@@ -861,5 +908,6 @@ document.addEventListener("visibilitychange",function(){
 booting=false;
 syncMark(syncOn?"busy":"off");
 if(syncOn)cloudSync();
-window.__CT={S:S,board:board,sync:cloudSync,absorb:absorb,state:function(){return {P:P,C:C,G:G,T:T}},next:next,jumpTo:jumpTo,pick:onPick,item:item,fit:fit};
+window.__CT={S:S,board:board,sync:cloudSync,absorb:absorb,begin:begin,
+  reveal:reveal,retry:retry,hint:hint,state:function(){return {P:P,C:C,G:G,T:T}},next:next,jumpTo:jumpTo,pick:onPick,item:item,fit:fit};
 }

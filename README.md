@@ -13,12 +13,17 @@ it's a board-vision course, where the arrows the author drew and the clock you'r
   you answer or fail, so the sniper arrow lands as an explanation rather than a giveaway.
 - **Plays the opponent's last move to you**, animated and highlighted, before the clock
   starts. For a blunder-check course, *what just changed* is the question.
-- **Puts you on a clock.** 20s per position, 15s for later moves in a line, configurable.
-  Running out counts as a miss.
+- **Puts you on a clock, but not while you're reading.** 20s per position, 15s for later
+  moves in a line, configurable. Where the author set the position up in prose, the clock
+  is loaded and held until you say go, so you're never timed on reading. Running out
+  counts as a miss.
+- **Never hands you the move.** Answer wrong or run out of time and it says so and puts
+  the position back — the move stays hidden until you ask for it. Guessing is not a way
+  to be told.
 - **Plays out the traps.** Play a move the author tagged `??` and the refutation plays
   on the board move by move with his commentary. Every side line stays explorable
   afterwards as clickable move chips.
-- **Quiz cold, teach on failure, then re-ask** the same position before moving on.
+- **Quiz cold, teach when you ask, then re-ask** the same position before moving on.
 
 348 items, 835 quiz moves, in the author's order, lessons in place.
 
@@ -92,6 +97,7 @@ build/pieces.py            -> data/pieces.json
 build/bundle.py       all  -> dist/clamp-trainer.html
 build/body.html       markup shared by both builds (edit index.html, not this)
 build/verify.mjs      walks the whole course through the real app
+build/verify-flow.mjs checks the clock gate and that a miss withholds the move
 build/verify-sync.mjs drives two browsers against a mock endpoint
 db/schema.sql         the Supabase table, to paste into the SQL editor
 source/*.pgn          the Chessable export
@@ -107,6 +113,25 @@ dist/                 the offline single-file build
 Saved to `localStorage` after every answered move, every item you move to, every lesson
 you open, and every settings change. It keeps the result of each individual quiz move
 (clean / hint / missed), which lessons you've read, your cursor, and your settings.
+
+## The quiz loop
+
+A position is set up, the opponent's move is played to you, and then:
+
+| you | it |
+|---|---|
+| still reading the setup | clock held, board locked, **Start** waiting on <kbd>↵</kbd> |
+| answer correctly | the author's arrows and commentary land as the explanation |
+| answer wrong | *That is not it.* — position back, move withheld, **Try again** / **Show me** |
+| run out of time | *Out of time.* — same, withheld |
+| play a move the author tagged `??` | the refutation plays out, then **Show the right move** |
+| press **Show me** or <kbd>R</kbd> | the move, the arrows, the commentary, the side lines |
+
+The clock is only held where there is something to read, and only once per move — a retry
+puts you straight back on the clock. With the clock off there is no gate at all.
+
+Either kind of failure marks the move missed whether or not you ask to see it, so the
+`missed` review queue is unaffected by how long you hold out.
 
 ## Cross-device sync
 
@@ -166,6 +191,15 @@ npm i playwright
 python3 -m http.server 8000 &
 node build/verify.mjs http://localhost:8000/
 node build/verify.mjs file://$PWD/dist/clamp-trainer.html
+```
+
+`build/verify-flow.mjs` covers the quiz loop: that the clock is held while there is setup
+text and starts only when you do, that a wrong answer and a timeout both land on a state
+that does *not* contain the move, that asking is what reveals it, and that a retry does
+not make you read the text again.
+
+```sh
+node build/verify-flow.mjs http://localhost:8000/
 ```
 
 `build/verify-sync.mjs` covers the sync layer instead. It stands up a mock endpoint
