@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="robots" content="noindex,nofollow">
+<title>CLAMP Trainer</title>
+<meta name="description" content="Move trainer for Preventing Blunders in Chess.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext y='26' font-size='26'%3E%E2%99%9F%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="./style.css">
+</head>
+<body>
+<div id="boot">Loading the course&hellip;</div>
+<div id="app" class="railoff">
+  <aside id="rail">
+    <div class="railhead">
+      <div class="brand">Preventing Blunders in Chess</div>
+      <div class="brandsub">CM Can Kabadayı · CLAMP</div>
+    </div>
+    <div class="railscroll" id="railList"></div>
+  </aside>
+
+  <main>
+    <div class="top">
+      <button class="iconbtn" id="btnRail" title="Contents (c)">
+        <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+      <div class="crumb"><div class="c1" id="crumbC"></div><div class="c2" id="crumbT"></div></div>
+      <div class="tally" id="tally"></div>
+      <div class="counter" id="counter"></div>
+      <button class="iconbtn" id="btnCfg" title="Settings">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6h.09A1.65 1.65 0 0 0 10.6 3.09V3a2 2 0 1 1 4 0v.09A1.65 1.65 0 0 0 16.11 4.6a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 20.43 9v.09A1.65 1.65 0 0 0 21.91 10.6H22a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+    </div>
+
+    <div class="stage" id="stage">
+      <div class="boardcol" id="boardcol">
+        <div class="boardwrap">
+          <div class="board" id="board"><div class="turnbadge" id="turnBadge"></div></div>
+        </div>
+        <div class="timer" id="timer"><i id="timerFill"></i></div>
+        <div class="ctl" id="ctl">
+          <button class="btn gh" id="bPrev" title="Previous (←)">‹</button>
+          <button class="btn" id="bHint">Hint <kbd>H</kbd></button>
+          <button class="btn" id="bReveal">Give up <kbd>R</kbd></button>
+          <button class="btn" id="bNext">Next <kbd>↵</kbd></button>
+          <span class="spacer"></span>
+          <button class="btn gh" id="bFlip" title="Flip board (f)">⇅</button>
+        </div>
+      </div>
+      <section class="panel"><div class="pscroll" id="panel"></div></section>
+    </div>
+
+    <div class="lessonwrap" id="lessonwrap" style="display:none">
+      <div class="lessonbody">
+        <div class="kicker" id="lesK"></div>
+        <h1 id="lesT"></h1>
+        <div class="prose" id="lesB"></div>
+        <div class="ctl" style="margin-top:34px">
+          <button class="btn gh" id="bPrev2">‹</button>
+          <button class="btn pri" id="bNext2">Next <kbd>↵</kbd></button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <div class="toast" id="toast"></div>
+  <div class="veil" id="veil"><div class="card" id="veilCard"></div></div>
+</div>
+
+<script src="./app.js"></script>
+<script>
+Promise.all([
+  fetch("./data/course.json").then(function(r){if(!r.ok)throw new Error(r.status);return r.json()}),
+  fetch("./data/pieces.json").then(function(r){if(!r.ok)throw new Error(r.status);return r.json()})
+]).then(function(v){
+  window.DATA=v[0];window.PIECES=v[1];startTrainer();
+}).catch(function(e){
+  var b=document.getElementById("boot");
+  if(b)b.textContent="Could not load the course data ("+e.message+"). Serve this folder over HTTP rather than opening the file directly \u2014 or use dist/clamp-trainer.html, which needs no server.";
+});
+</script>
+</body>
+</html>

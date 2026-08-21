@@ -1,0 +1,54 @@
+<div id="app" class="railoff">
+  <aside id="rail">
+    <div class="railhead">
+      <div class="brand">Preventing Blunders in Chess</div>
+      <div class="brandsub">CM Can Kabadayı · CLAMP</div>
+    </div>
+    <div class="railscroll" id="railList"></div>
+  </aside>
+
+  <main>
+    <div class="top">
+      <button class="iconbtn" id="btnRail" title="Contents (c)">
+        <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+      <div class="crumb"><div class="c1" id="crumbC"></div><div class="c2" id="crumbT"></div></div>
+      <div class="tally" id="tally"></div>
+      <div class="counter" id="counter"></div>
+      <button class="iconbtn" id="btnCfg" title="Settings">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6h.09A1.65 1.65 0 0 0 10.6 3.09V3a2 2 0 1 1 4 0v.09A1.65 1.65 0 0 0 16.11 4.6a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 20.43 9v.09A1.65 1.65 0 0 0 21.91 10.6H22a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+    </div>
+
+    <div class="stage" id="stage">
+      <div class="boardcol" id="boardcol">
+        <div class="boardwrap">
+          <div class="board" id="board"><div class="turnbadge" id="turnBadge"></div></div>
+        </div>
+        <div class="timer" id="timer"><i id="timerFill"></i></div>
+        <div class="ctl" id="ctl">
+          <button class="btn gh" id="bPrev" title="Previous (←)">‹</button>
+          <button class="btn" id="bHint">Hint <kbd>H</kbd></button>
+          <button class="btn" id="bReveal">Give up <kbd>R</kbd></button>
+          <button class="btn" id="bNext">Next <kbd>↵</kbd></button>
+          <span class="spacer"></span>
+          <button class="btn gh" id="bFlip" title="Flip board (f)">⇅</button>
+        </div>
+      </div>
+      <section class="panel"><div class="pscroll" id="panel"></div></section>
+    </div>
+
+    <div class="lessonwrap" id="lessonwrap" style="display:none">
+      <div class="lessonbody">
+        <div class="kicker" id="lesK"></div>
+        <h1 id="lesT"></h1>
+        <div class="prose" id="lesB"></div>
+        <div class="ctl" style="margin-top:34px">
+          <button class="btn gh" id="bPrev2">‹</button>
+          <button class="btn pri" id="bNext2">Next <kbd>↵</kbd></button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <div class="toast" id="toast"></div>
+  <div class="veil" id="veil"><div class="card" id="veilCard"></div></div>
+</div>
