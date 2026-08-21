@@ -113,7 +113,11 @@ async function settle(d) {
     () => /idle|err|off/.test(document.getElementById("sync").className),
     null, { timeout: 15000 }
   );
-  return d.page.evaluate(() => window.__CT.state());
+  return d.page.evaluate(() => {
+    const st = window.__CT.state(), res = {};
+    for (const k in st.P.att) { const r = window.__CT.resOf(k); if (r) res[k] = r; }
+    return { ...st, res };          // res is derived, for readable assertions
+  });
 }
 
 const S = (res, read, cursor, C, G, T) => ({ P: { res, read, cursor }, C, G, T });
@@ -143,9 +147,9 @@ rows = new Map();
       { secs: 45, auto: 2, coords: 0, mode: "todo" }, 0, 2000), 2000);
   const sb = await settle(b);
 
-  ok("B keeps its own work", sb.P.res["3:4"] === "hint", sb.P.res);
-  ok("B receives A's work", sb.P.res["5:2"] === "clean", sb.P.res);
-  ok("worst wins: clean(A) vs missed(B) -> missed", sb.P.res["1:0"] === "missed", sb.P.res);
+  ok("B keeps its own work", sb.res["3:4"] === "hint", sb.res);
+  ok("B receives A's work", sb.res["5:2"] === "clean", sb.res);
+  ok("worst wins: clean(A) vs missed(B) -> missed", sb.res["1:0"] === "missed", sb.res);
   ok("read unions", sb.P.read["2"] === 1 && sb.P.read["9"] === 1, sb.P.read);
   ok("later writer keeps the cursor", sb.P.cursor === 42, sb.P.cursor);
   ok("later writer keeps settings", sb.C.secs === 45 && sb.C.mode === "todo", sb.C);
@@ -156,11 +160,11 @@ rows = new Map();
     S({ "1:0": "clean", "5:2": "clean" }, { "2": 1 }, 5,
       { secs: 20, auto: 0, coords: 1, mode: "all" }, 0, 1000), 3000);
   const sa2 = await settle(a2);
-  ok("A receives B's work", sa2.P.res["3:4"] === "hint", sa2.P.res);
-  ok("worst wins in the other direction too", sa2.P.res["1:0"] === "missed", sa2.P.res);
+  ok("A receives B's work", sa2.res["3:4"] === "hint", sa2.res);
+  ok("worst wins in the other direction too", sa2.res["1:0"] === "missed", sa2.res);
   ok("A adopts B's newer cursor", sa2.P.cursor === 42, sa2.P.cursor);
   ok("A adopts B's newer settings", sa2.C.secs === 45, sa2.C);
-  ok("A keeps its own untouched entries", sa2.P.res["5:2"] === "clean", sa2.P.res);
+  ok("A keeps its own untouched entries", sa2.res["5:2"] === "clean", sa2.res);
   await a2.ctx.close();
 }
 
@@ -173,8 +177,8 @@ rows = new Map();
   const b = await device(S({ "7:1": "clean" }, {}, 0,
     { secs: 20, auto: 0, coords: 1, mode: "all" }, 0, 2000), 2000);
   const sb = await settle(b);
-  ok("stays missed", sb.P.res["7:1"] === "missed", sb.P.res);
-  ok("server agrees", rows.get("clamp").data.P.res["7:1"] === "missed",
+  ok("stays missed", sb.res["7:1"] === "missed", sb.res);
+  ok("server agrees (via the compatibility mirror)", rows.get("clamp").data.P.res["7:1"] === "missed",
      rows.get("clamp").data.P.res);
   await b.ctx.close();
 }
@@ -190,10 +194,10 @@ rows = new Map();
   await a.page.waitForFunction(
     () => /idle|err/.test(document.getElementById("sync").className), null, { timeout: 15000 });
   const sa = await a.page.evaluate(() => window.__CT.state());
-  ok("A is empty locally", Object.keys(sa.P.res).length === 0, sa.P.res);
+  ok("A is empty locally", Object.keys(sa.P.att).length === 0, sa.P.att);
   ok("A bumped the generation", sa.G === 1, sa.G);
   ok("server row is empty at gen 1",
-     rows.get("clamp").gen === 1 && Object.keys(rows.get("clamp").data.P.res).length === 0,
+     rows.get("clamp").gen === 1 && Object.keys(rows.get("clamp").data.P.att).length === 0,
      rows.get("clamp"));
   await a.ctx.close();
 
@@ -201,11 +205,11 @@ rows = new Map();
   const b = await device(S({ "1:0": "missed", "2:1": "clean" }, { "4": 1 }, 8,
     { secs: 20, auto: 0, coords: 1, mode: "all" }, 0, 1500), 4000);
   const sb = await settle(b);
-  ok("B adopts the wipe", Object.keys(sb.P.res).length === 0, sb.P.res);
+  ok("B adopts the wipe", Object.keys(sb.res).length === 0, sb.res);
   ok("B clears read too", Object.keys(sb.P.read).length === 0, sb.P.read);
   ok("B is at gen 1", sb.G === 1, sb.G);
   ok("stale progress did not come back to the server",
-     Object.keys(rows.get("clamp").data.P.res).length === 0, rows.get("clamp").data.P);
+     Object.keys(rows.get("clamp").data.P.att).length === 0, rows.get("clamp").data.P);
   await b.ctx.close();
 }
 
@@ -219,9 +223,9 @@ rows = new Map();
   ok("dot reports the failure",
      (await a.page.getAttribute("#sync", "class")) === "sync err",
      await a.page.getAttribute("#sync", "class"));
-  ok("local progress survives", sa.P.res["1:0"] === "clean", sa.P.res);
+  ok("local progress survives", sa.res["1:0"] === "clean", sa.res);
   ok("still written to localStorage",
-     await a.page.evaluate((k) => !!JSON.parse(localStorage.getItem(k)).P.res["1:0"], KEY));
+     await a.page.evaluate((k) => !!JSON.parse(localStorage.getItem(k)).P.att["1:0"], KEY));
   ok("no page errors", a.errs.length === 0, a.errs);
   await a.ctx.close();
 
@@ -232,6 +236,8 @@ rows = new Map();
   await settle(a2);
   ok("recovers when the endpoint returns",
      rows.get("clamp").data.P.res["1:0"] === "clean", rows.get("clamp"));
+  ok("and sends attempts, not just the mirror",
+     !!rows.get("clamp").data.P.att["1:0"], rows.get("clamp").data.P);
   await a2.ctx.close();
 }
 
@@ -240,7 +246,7 @@ rows = new Map();
 {
   const a = await device(null, 5000);
   await settle(a);
-  const before = JSON.stringify(rows.get("clamp").data.P.res);
+  const before = JSON.stringify(rows.get("clamp").data.P.att);
   await a.page.evaluate(() => {
     document.querySelector('[data-seg="secs"] [data-v="0"]').click();  // clock off
   });
@@ -251,7 +257,7 @@ rows = new Map();
   await a.page.waitForTimeout(400);
   await settle(a);
   const after = rows.get("clamp").data;
-  ok("cursor advanced on the server", after.P.cursor !== 0 || before !== JSON.stringify(after.P.res),
+  ok("cursor advanced on the server", after.P.cursor !== 0 || before !== JSON.stringify(after.P.att),
      { before, after: after.P });
   ok("no page errors while playing", a.errs.length === 0, a.errs);
   await a.ctx.close();
@@ -288,7 +294,7 @@ rows = new Map();
     const cls = await page.getAttribute("#sync", "class");
     ok("cross-origin request from file:// is not blocked", cls === "sync idle", cls);
     ok("offline build pushes its progress",
-       rows.get("clamp") && rows.get("clamp").data.P.res["6:3"] === "hint",
+       rows.get("clamp") && !!rows.get("clamp").data.P.att["6:3"],
        rows.get("clamp"));
     ok("no page errors", errs.length === 0, errs);
     await ctx.close();

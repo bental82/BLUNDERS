@@ -217,18 +217,34 @@ function prose(t){
 
 /* ============================== state ============================== */
 var KEY="pbc.trainer.v1";
-var P={res:{},read:{},cursor:0},C={secs:20,auto:0,coords:1,mode:"all"};
+/* P.att[<item>:<ply>] = [[code, ms], ...] -- one entry per attempt, oldest
+   first, newest last, capped. Codes: 0 clean, 1 hint, 2 missed. The colour is
+   derived from this (see resOf) rather than stored, which is what lets a red
+   move go green again without breaking the cross-device merge: appending is
+   grow-only, overwriting a verdict would not be. */
+var P={att:{},read:{},cursor:0},C={secs:20,auto:0,coords:1,mode:"all"};
+var CODE={clean:0,hint:1,missed:2},NAME=["clean","hint","missed"],ATTCAP=8;
+var REDEEM_MS=6*3600*1000;  /* and a later local day; see redeems() */
 var G=0,T=0;  /* reset generation; ms of the last deliberate local write */
 /* Restoring the cursor at boot goes through save() too. Letting that stamp T
    would make a laptop opened on Monday outrank the phone you actually worked
    on, and you would lose your place; so nothing stamps T until boot is done. */
 var booting=true;
 function defaults(){return {secs:20,auto:0,coords:1,mode:"all"}}
+/* Older saves (and any device still on the previous build) carry P.res, a
+   single verdict per move. Read it as one attempt of unknown age, which makes
+   every old red move redeemable on the next session rather than needing to be
+   missed again first. */
+function fromRes(res){
+  var a={},k;
+  for(k in res||{}){var c=CODE[res[k]];if(c!==undefined)a[k]=[[c,0]]}
+  return a;
+}
 function load(){try{var j=JSON.parse(localStorage.getItem(KEY)||"{}");
-  if(j.P){P.res=j.P.res||{};P.read=j.P.read||{};P.cursor=j.P.cursor||0}
+  if(j.P){P.att=j.P.att||fromRes(j.P.res);P.read=j.P.read||{};P.cursor=j.P.cursor||0}
   if(j.C){for(var k in j.C)C[k]=j.C[k]}
   G=j.G||0;T=j.T||0}catch(e){}}
-function stash(){try{localStorage.setItem(KEY,JSON.stringify({P:P,C:C,G:G,T:T}))}catch(e){}}
+function stash(){try{localStorage.setItem(KEY,JSON.stringify({P:withRes(),C:C,G:G,T:T}))}catch(e){}}
 function save(){if(!booting)T=Date.now();stash();cloudSoon()}
 load();
 
@@ -238,9 +254,9 @@ load();
    Progress merges rather than overwrites, so two devices can each be ahead
    of the other and neither loses work:
 
-     res     worst of the two wins (clean < hint < missed) -- the same rule
-             mark() already applies when you re-answer a move, which makes
-             the map grow-only and the merge order-independent
+     att     union of the attempts, keyed by their timestamps; where both
+             sides hold the same attempt the worse outcome wins. Appending
+             is grow-only, so the merge stays order-independent
      read    union
      cursor  whichever side wrote last
      C       whichever side wrote last
@@ -254,7 +270,6 @@ var SYNC=window.SYNC||{
   table:"clamp_progress",
   row:"clamp"
 };
-var RANK={clean:0,hint:1,missed:2};
 var syncTimer=null,syncBusy=false,syncAgain=false,syncOn=!!(SYNC&&SYNC.url&&SYNC.key);
 
 function sb(path,opts){
@@ -276,15 +291,23 @@ function absorb(row){
   var d=row&&row.data||{},rp=d.P||{},rc=d.C||{},rt=d.T||0,rg=row&&row.gen||0,k;
   if(rg<G)return false;                 /* our reset is newer -- our push wins */
   if(rg>G){                             /* reset on another device: take it whole */
-    P={res:rp.res||{},read:rp.read||{},cursor:rp.cursor||0};
+    P={att:rp.att||fromRes(rp.res),read:rp.read||{},cursor:rp.cursor||0};
     C=defaults();for(k in rc)C[k]=rc[k];
     G=rg;T=rt;stash();return true;
   }
   var ch=false;
-  for(k in rp.res||{}){
-    var a=P.res[k],b=rp.res[k];
-    if(a===b||RANK[b]===undefined)continue;
-    if(a===undefined||RANK[b]>(RANK[a]||0)){P.res[k]=b;ch=true}
+  var ratt=rp.att||fromRes(rp.res);   /* a device still on the old build */
+  for(k in ratt){
+    var mine=P.att[k]||[],theirs=ratt[k]||[],by={},i,e,t;
+    for(i=0;i<mine.length;i++)by[mine[i][1]]=mine[i][0];
+    for(i=0;i<theirs.length;i++){
+      e=theirs[i];if(!e||e.length<2)continue;
+      t=e[1];if(by[t]===undefined||e[0]>by[t])by[t]=e[0];
+    }
+    var ts=Object.keys(by).map(Number).sort(function(x,y){return x-y});
+    if(ts.length>ATTCAP)ts=ts.slice(ts.length-ATTCAP);
+    var merged=ts.map(function(x){return [by[x],x]});
+    if(JSON.stringify(merged)!==JSON.stringify(mine)){P.att[k]=merged;ch=true}
   }
   for(k in rp.read||{})if(!P.read[k]){P.read[k]=1;ch=true}
   if(rt>T){
@@ -295,10 +318,17 @@ function absorb(row){
   if(ch)stash();
   return ch;
 }
+/* P plus a derived P.res, so a device still on the previous build reads
+   colours it understands rather than an empty slate. Never read back. */
+function withRes(){
+  var res={},k;
+  for(k in P.att){var r=resOf(k);if(r)res[k]=r}
+  return {att:P.att,read:P.read,cursor:P.cursor,res:res};
+}
 function push(extra){
   var o={method:"POST",
     headers:{"Content-Type":"application/json",Prefer:"resolution=merge-duplicates"},
-    body:JSON.stringify([{id:SYNC.row,gen:G,data:{P:P,C:C,T:T},
+    body:JSON.stringify([{id:SYNC.row,gen:G,data:{P:withRes(),C:C,T:T},
                           updated_at:new Date().toISOString()}])};
   if(extra&&extra.keepalive)o.keepalive=true;
   return sb(SYNC.table,o);
@@ -337,24 +367,49 @@ function repaint(){
 }
 /* Local wipe that also wins on every other device. */
 function resetAll(){
-  P={res:{},read:{},cursor:0};G=G+1;T=Date.now();stash();
+  P={att:{},read:{},cursor:0};G=G+1;T=Date.now();stash();
   if(syncOn){syncMark("busy");
     push().then(function(r){syncMark(r.ok?"idle":"err",r.ok?"":"write "+r.status)})
           .catch(function(e){syncMark("err",e.message)})}
 }
 
 var S={order:[],k:0,ply:0,phase:"idle",failed:false,hinted:false,parts:[],
-       pendAnn:null,explore:null,trapAlt:null,trapK:0,timer:null,why:"",ready4:-1};
+       pendAnn:null,explore:null,trapAlt:null,trapK:0,timer:null,why:"",ready4:-1,
+       marked:false};
 var board=new Board($("board"));
 
 function item(){return DATA[S.order[S.k]]}
+/* A clean answer redeems a miss only on a later local day and at least six
+   hours later -- answering right seconds after being shown proves echo, not
+   recall, and the six hours close the two-minutes-past-midnight loophole. */
+function dayOf(t){var d=new Date(t);return d.getFullYear()*10000+d.getMonth()*100+d.getDate()}
+function redeems(tOk,tBad){return tOk-tBad>=REDEEM_MS&&dayOf(tOk)>dayOf(tBad)}
+/* The verdict for one quiz move: undefined if untouched, else clean/hint/missed. */
+function resOf(key){
+  var a=P.att[key],i;
+  if(!a||!a.length)return undefined;
+  var tBad=-1,cBad=0;
+  for(i=0;i<a.length;i++)if(a[i][0]>0&&a[i][1]>=tBad){tBad=a[i][1];cBad=a[i][0]}
+  if(tBad<0)return "clean";                       /* never gone wrong */
+  for(i=0;i<a.length;i++)
+    if(a[i][0]===0&&redeems(a[i][1],tBad))return "clean";   /* earned it back */
+  return NAME[cBad];
+}
+/* Is this move waiting to be earned back, and can that happen yet? */
+function pending(key){
+  var a=P.att[key],i,tBad=-1;
+  if(!a)return null;
+  for(i=0;i<a.length;i++)if(a[i][0]>0&&a[i][1]>tBad)tBad=a[i][1];
+  if(tBad<0||resOf(key)==="clean")return null;
+  return {since:tBad,ready:redeems(Date.now(),tBad)};
+}
 function statusOf(it){
   if(it.kind!=="pos")return P.read[it.id]?"read":"";
   var seen=0,total=0,worst="clean";
   for(var i=0;i<it.plies.length;i++){
     if(!it.plies[i].q)continue;
     total++;
-    var r=P.res[it.id+":"+i];
+    var r=resOf(it.id+":"+i);
     if(!r)continue;
     seen++;
     if(r==="missed")worst="missed";
@@ -511,12 +566,12 @@ function ask(p){
     $("timerFill").style.transform="scaleX(1)";$("timer").className="timer";
     renderPanel();return;
   }
-  S.phase="quiz";board.locked=false;
+  S.phase="quiz";S.marked=false;board.locked=false;
   renderPanel();startTimer();
 }
 function begin(){
   if(S.phase!=="ready")return;
-  S.ready4=S.ply;S.phase="quiz";board.locked=false;
+  S.ready4=S.ply;S.phase="quiz";S.marked=false;board.locked=false;
   renderPanel();startTimer();
 }
 function onPick(uci){
@@ -549,9 +604,10 @@ function good(p){
 function reveal(){
   if(S.phase!=="quiz"&&S.phase!=="missed")return;
   var it=item(),p=it.plies[S.ply];
-  var why=(S.phase==="missed"&&S.why)?S.why:"Shown.";
+  var fromMissed=(S.phase==="missed");
+  var why=(fromMissed&&S.why)?S.why:"Shown.";
   board.locked=true;board.legal=null;board.select(-1);stopTimer();
-  mark(p,"missed");
+  if(!fromMissed)mark(p,"missed");   /* already recorded when the miss happened */
   teach(p,why);
 }
 /* Wrong, or out of time: say so, put the position back, and stop there. */
@@ -584,11 +640,20 @@ function playTrap(p,alt){
     setTimeout(run,d(st.t?1250:750));
   })();
 }
+/* One ask, one entry. Later calls within the same ask only make it worse --
+   a hint followed by the right move is still a hint, exactly as before. */
 function mark(p,val){
-  var it=item(),key=it.id+":"+S.ply,cur=P.res[key];
-  if(val==="missed"||cur==="missed"){P.res[key]="missed"}
-  else if(val==="hint"||cur==="hint"){P.res[key]="hint"}
-  else P.res[key]="clean";
+  var key=item().id+":"+S.ply,c=CODE[val];
+  var a=P.att[key]||(P.att[key]=[]);
+  if(S.marked&&a.length){
+    var last=a[a.length-1];
+    if(c<=last[0])return;
+    last[0]=c;
+  } else {
+    a.push([c,Date.now()]);
+    if(a.length>ATTCAP)a.splice(0,a.length-ATTCAP);
+    S.marked=true;
+  }
   save();syncRail();renderTally();
 }
 function itemDone(){
@@ -655,6 +720,7 @@ function renderPanel(){
        (tmo2?ICO.nu:ICO.no)+"</span>"+esc(S.why||"")+"</div>";
     if(ctx)h+='<div class="prose" style="opacity:.6">'+ctx+"</div>";
     h+='<div class="hintline">Still hidden. Try it again, or ask to be shown.</div>';
+    h+=redeemNote();
   } else if(S.phase==="taught"){
     var tmo=(S.why==="Out of time.");
     h+='<div class="verdict '+(tmo?"v-nu":"v-no")+'"><span class="mk">'+
@@ -662,6 +728,7 @@ function renderPanel(){
     h+='<div style="margin-bottom:12px"><span class="movetag ok">'+esc(p.s)+"</span></div>";
     if(ctx)h+='<div class="prose" style="opacity:.6">'+ctx+"</div>";
     if(p.t)h+='<div class="prose">'+prose(p.t)+"</div>";
+    h+=redeemNote();
     h+=altsBlock(p);
   } else if(S.phase==="done"){
     var qs=0;for(var z=0;z<it.plies.length;z++)if(it.plies[z].q)qs++;
@@ -672,6 +739,16 @@ function renderPanel(){
   }
   $("panel").innerHTML=h;
   wirePanel();buttons();
+}
+/* What it takes to get this move back to green, in words. */
+function redeemNote(){
+  var pd=pending(item().id+":"+S.ply);
+  if(!pd)return"";
+  return '<div class="hintline">'+(pd.ready
+    ? "Answer this clean now and it goes back to green."
+    : "Answer it clean on a later day and it goes back to green \u2014 getting it "+
+      "right again straight after being shown proves recall of the last minute, "+
+      "not of the pattern.")+"</div>";
 }
 function defaultAsk(it,p){
   var m=/(\d+)\s+Moves in a Row/i.exec(it.title);
@@ -766,7 +843,7 @@ function renderTally(){
     for(var i=0;i<it.plies.length;i++){
       if(!it.plies[i].q)continue;
       tot++;
-      var r=P.res[it.id+":"+i];
+      var r=resOf(it.id+":"+i);
       if(r==="clean")ok++;else if(r==="missed"||r==="hint")no++;
     }
   });
@@ -909,5 +986,6 @@ booting=false;
 syncMark(syncOn?"busy":"off");
 if(syncOn)cloudSync();
 window.__CT={S:S,board:board,sync:cloudSync,absorb:absorb,begin:begin,
+  resOf:resOf,pending:pending,statusOf:statusOf,
   reveal:reveal,retry:retry,hint:hint,state:function(){return {P:P,C:C,G:G,T:T}},next:next,jumpTo:jumpTo,pick:onPick,item:item,fit:fit};
 }

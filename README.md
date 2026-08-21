@@ -98,6 +98,7 @@ build/bundle.py       all  -> dist/clamp-trainer.html
 build/body.html       markup shared by both builds (edit index.html, not this)
 build/verify.mjs      walks the whole course through the real app
 build/verify-flow.mjs checks the clock gate and that a miss withholds the move
+build/verify-redeem.mjs checks how a red exercise goes green again
 build/verify-sync.mjs drives two browsers against a mock endpoint
 db/schema.sql         the Supabase table, to paste into the SQL editor
 source/*.pgn          the Chessable export
@@ -133,6 +134,36 @@ puts you straight back on the clock. With the clock off there is no gate at all.
 Either kind of failure marks the move missed whether or not you ask to see it, so the
 `missed` review queue is unaffected by how long you hold out.
 
+## Turning a red exercise green
+
+A missed move does not stay missed forever, but you have to earn it back:
+
+> A move is red until you answer it clean on a **later local day**, at least **six hours**
+> after the miss. Miss it again and it is red again.
+
+Both halves matter. Answering right ninety seconds after being shown the move proves
+recall of the last ninety seconds, not of the pattern, so a same-session retry never
+clears anything. The six hours are there because a miss at 23:58 and a clean answer at
+00:03 is a different calendar day and obviously not a different sitting. A move you
+needed the hint for clears the same way — needing the circled piece means you did not
+have it.
+
+The panel tells you where you stand after a miss, and the `missed` review queue empties
+itself as you redeem, so *Run the missed ones* stays an honest list of what you still owe.
+
+This is why progress is stored as **attempts rather than verdicts**:
+
+```
+att["12:4"] = [[2, 1773...], [0, 1773...]]     // [outcome, ms]; 0 clean, 1 hint, 2 missed
+```
+
+One entry per ask, capped at the last eight. The colour is derived from the list rather
+than written into it — which is also what keeps the cross-device merge sound. A verdict
+that can improve cannot be merged with worst-of any more, and two devices syncing in
+different orders would disagree; an append-only list of attempts is still grow-only, so
+the union stays order-independent. Saves from the previous build are read as a single
+attempt of unknown age, so every already-red move is redeemable on the next session.
+
 ## Cross-device sync
 
 The same progress also syncs through Supabase, so the phone and the laptop stay in step
@@ -157,20 +188,22 @@ neither loses work:
 
 | | rule |
 |---|---|
-| quiz results | worst of the two wins (`clean` < `hint` < `missed`) |
+| quiz attempts | union by timestamp; the same attempt on both sides keeps the worse outcome |
 | lessons read | union |
 | cursor, settings | whichever device wrote last |
 
-Worst-of is not a compromise — it is the rule `mark()` already applies when you
-re-answer a move, which makes the result map grow-only and the merge independent of the
-order the devices happen to sync in.
+Union is not a compromise — an attempt log only ever grows, which makes the merge
+independent of the order the devices happen to sync in, and lets the colour be derived
+consistently on every device from the same set of attempts.
 
 The one thing that rule cannot express is a deliberate wipe, which a merge would simply
 undo. So *Reset progress* bumps a generation counter, and a higher generation beats the
 merge outright; the wipe reaches the other devices instead of being merged away. That
 is also why the button now says "on every device".
 
-Roughly 17 KB at 100% completion — one row, well inside the free tier.
+Roughly 85 KB fully worked through — one row, well inside the free tier. The blob also
+carries a derived `res` map of plain colours, which nothing reads back; it is there so a
+device still running the previous build sees sane colours rather than an empty slate.
 
 ## Known issue in the source PGN
 
@@ -200,6 +233,15 @@ not make you read the text again.
 
 ```sh
 node build/verify-flow.mjs http://localhost:8000/
+```
+
+`build/verify-redeem.mjs` covers redemption: the day-and-six-hours rule and the midnight
+loophole it closes, hints clearing the same way, a re-miss turning it red again, one ask
+recording exactly one attempt, the rail and review queue following the derived colour,
+two devices agreeing after merging attempts, and old saves migrating.
+
+```sh
+node build/verify-redeem.mjs http://localhost:8000/
 ```
 
 `build/verify-sync.mjs` covers the sync layer instead. It stands up a mock endpoint
