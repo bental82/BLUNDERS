@@ -283,7 +283,8 @@ function load(){try{var j=JSON.parse(localStorage.getItem(KEY)||"{}");
   if(j.P){P.att=j.P.att||fromRes(j.P.res);P.read=j.P.read||{};P.cursor=j.P.cursor||0}
   if(j.C){for(var k in j.C)C[k]=j.C[k]}
   G=j.G||0;T=j.T||0}catch(e){}}
-function stash(){try{localStorage.setItem(KEY,JSON.stringify({P:withRes(),C:C,G:G,T:T}))}catch(e){}}
+function stash(){try{localStorage.setItem(KEY,
+  JSON.stringify({P:{att:P.att,read:P.read,cursor:P.cursor},C:C,G:G,T:T}))}catch(e){}}
 function save(){if(!booting)T=Date.now();stash();cloudSoon()}
 load();
 /* Offer only what data/pieces.json actually carries. A stale cached copy would
@@ -315,7 +316,13 @@ var SYNC=window.SYNC||{
   table:"clamp_progress",
   row:"clamp"
 };
-var syncTimer=null,syncBusy=false,syncAgain=false,syncOn=!!(SYNC&&SYNC.url&&SYNC.key);
+var syncTimer=null,syncBusy=false,syncAgain=false,syncFails=0,syncBeat=null,syncAt=0,
+    syncOn=!!(SYNC&&SYNC.url&&SYNC.key);
+function ago(t){
+  var s=Math.max(0,Math.round((Date.now()-t)/1000));
+  return s<60?"just now":s<3600?Math.round(s/60)+"m ago":
+         s<86400?Math.round(s/3600)+"h ago":Math.round(s/86400)+"d ago";
+}
 
 function sb(path,opts){
   opts=opts||{};
@@ -327,8 +334,10 @@ function sb(path,opts){
 function syncMark(state,detail){
   var el=$("sync");if(!el)return;
   el.className="sync "+state;
-  el.title=({idle:"Synced",busy:"Syncing\u2026",off:"Sync off \u2014 this browser only",
-             err:"Sync failed: "+(detail||"")+" \u2014 progress is safe in this browser"})[state]||"";
+  el.title=({idle:"Synced"+(syncAt?", "+ago(syncAt):""),busy:"Syncing\u2026",
+             off:"Sync off \u2014 this browser only",
+             err:"Sync failed: "+(detail||"")+
+                 " \u2014 progress is safe in this browser, still retrying"})[state]||"";
 }
 
 /* Fold a server row into P/C. Returns true if anything here changed. */
@@ -363,17 +372,17 @@ function absorb(row){
   if(ch)stash();
   return ch;
 }
-/* P plus a derived P.res, so a device still on the previous build reads
-   colours it understands rather than an empty slate. Never read back. */
-function withRes(){
-  var res={},k;
-  for(k in P.att){var r=resOf(k);if(r)res[k]=r}
-  return {att:P.att,read:P.read,cursor:P.cursor,res:res};
-}
+/* This used to also send a derived P.res, so a device on the previous build
+   would read colours it understood. That was a mistake: such a device reads
+   it and pushes back a payload carrying res and no att, and because the write
+   is a whole-row upsert that erased the attempt log for every device. The
+   next current device then rebuilt att from res with every timestamp at 0.
+   Nothing but att is written now, so a row can no longer be flattened. */
 function push(extra){
   var o={method:"POST",
     headers:{"Content-Type":"application/json",Prefer:"resolution=merge-duplicates"},
-    body:JSON.stringify([{id:SYNC.row,gen:G,data:{P:withRes(),C:C,T:T},
+    body:JSON.stringify([{id:SYNC.row,gen:G,
+                          data:{P:{att:P.att,read:P.read,cursor:P.cursor},C:C,T:T},
                           updated_at:new Date().toISOString()}])};
   if(extra&&extra.keepalive)o.keepalive=true;
   return sb(SYNC.table,o);
@@ -389,19 +398,41 @@ function cloudSync(){
       var ch=rows&&rows.length?absorb(rows[0]):false;
       return push().then(function(r){
         if(!r.ok)return r.text().then(function(t){throw new Error("write "+r.status+" "+t.slice(0,120))});
-        syncMark("idle");
+        syncFails=0;syncAt=Date.now();syncMark("idle");
         if(ch)repaint();
         return ch;
       });
     })
-    .catch(function(e){syncMark("err",e.message);return false})
-    .then(function(v){syncBusy=false;if(syncAgain)cloudSoon();return v});
+    .catch(function(e){
+      /* A device that failed its last push would otherwise sit on unsynced
+         work until the next answered move, which on a phone can be days. */
+      syncFails++;syncMark("err",e.message);
+      cloudSoon(Math.min(60000,1500*Math.pow(2,Math.min(syncFails,6))));
+      return false;
+    })
+    .then(function(v){syncBusy=false;if(syncAgain){syncAgain=false;cloudSoon(300)}return v});
 }
-function cloudSoon(){if(!syncOn)return;clearTimeout(syncTimer);syncTimer=setTimeout(cloudSync,1200)}
+function cloudSoon(ms){
+  if(!syncOn)return;
+  clearTimeout(syncTimer);syncTimer=setTimeout(cloudSync,ms||1200);
+}
 function cloudFlush(){
   if(!syncOn)return;
-  clearTimeout(syncTimer);
-  if(!syncBusy)try{push({keepalive:true})}catch(e){}
+  clearTimeout(syncTimer);syncTimer=null;
+  /* Clearing the timer without this flag dropped the pending work: a sync in
+     flight finished, found nothing queued, and the last answers never went. */
+  if(syncBusy){syncAgain=true;return}
+  try{push({keepalive:true}).then(function(r){
+    if(r&&r.ok){syncFails=0;syncAt=Date.now()}},function(){})}catch(e){}
+}
+/* A device left open should pick up the other one's work untouched, and a push
+   lost to a backgrounded tab should get another chance without being prompted. */
+function cloudBeat(){
+  if(!syncOn)return;
+  clearInterval(syncBeat);
+  syncBeat=setInterval(function(){
+    if(document.visibilityState==="visible"&&!syncBusy)cloudSync();
+  },45000);
 }
 /* Repaint everything derived from P/C without disturbing the live question. */
 function repaint(){
@@ -969,7 +1000,8 @@ function overlayStart(){
 function overlaySettings(){
   veilNow="settings";
   var h='<h2>Settings</h2><div class="sub">'+
-    (syncOn?"Synced across your devices.":"Saved in this browser.")+"</div>"+prefRows()+
+    (syncOn?("Synced across your devices"+(syncAt?" \u00b7 last "+ago(syncAt):"")+".")
+           :"Saved in this browser.")+"</div>"+prefRows()+
     '<div class="cardfoot"><button class="btn pri" data-act="close">Done</button>'+
     '<span class="spacer"></span><button class="btn gh" data-act="wipe">Reset progress</button></div>';
   openVeil(h,function(act){
@@ -1070,13 +1102,19 @@ buildOrder();renderRail();fit();
 var k0=S.order.indexOf(P.cursor);S.k=k0<0?0:k0;
 loadItem();
 overlayStart();
-window.addEventListener("beforeunload",function(){T=Date.now();stash();cloudFlush()});
+/* iOS Safari fires pagehide reliably and beforeunload barely at all, and it
+   restores from the back/forward cache with pageshow rather than a fresh load.
+   Stash without stamping T: closing a tab is not a deliberate write, and
+   bumping it made the last device to close win the cursor and settings. */
+window.addEventListener("beforeunload",function(){stash();cloudFlush()});
+window.addEventListener("pagehide",function(){stash();cloudFlush()});
+window.addEventListener("pageshow",function(){if(syncOn)cloudSync()});
 document.addEventListener("visibilitychange",function(){
   if(document.visibilityState==="hidden")cloudFlush();else cloudSync();
 });
 booting=false;
 syncMark(syncOn?"busy":"off");
-if(syncOn)cloudSync();
+if(syncOn){cloudSync();cloudBeat()}
 window.__CT={S:S,board:board,sync:cloudSync,absorb:absorb,begin:begin,
   resOf:resOf,pending:pending,statusOf:statusOf,
   reveal:reveal,retry:retry,hint:hint,state:function(){return {P:P,C:C,G:G,T:T}},next:next,jumpTo:jumpTo,pick:onPick,item:item,fit:fit};

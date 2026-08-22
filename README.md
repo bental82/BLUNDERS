@@ -99,7 +99,11 @@ key are already in `app.js` under `var SYNC`; set `window.SYNC` before `startTra
 point elsewhere.
 
 A dot in the top bar shows the state — dim off, pulsing syncing, green current, red
-failed. Failure isn't lossy: everything lands in `localStorage` and goes up next time.
+failed; hover it for when it last succeeded. Failure isn't lossy and isn't final: it
+retries on its own with a backoff, so a device that fails its last push doesn't sit on
+unsynced work until you next answer something. A device left open re-syncs every 45s, and
+on `pagehide` / `pageshow` / `visibilitychange` — iOS fires `pagehide` reliably and
+`beforeunload` barely at all.
 
 **Progress merges, it doesn't overwrite.** Both devices can be ahead and neither loses
 work:
@@ -113,7 +117,14 @@ work:
 A wipe can't be expressed as a merge, so *Reset progress* bumps a generation counter that
 beats the merge and carries the wipe to every device.
 
-About 85 KB fully worked through — one row, well inside the free tier.
+About 45 KB fully worked through — one row, well inside the free tier.
+
+**Only attempts are written.** An earlier version also pushed a derived `res` map of plain
+colours so a device on the previous build wouldn't see a blank slate. That was a mistake:
+such a device reads it and pushes back a payload carrying `res` and *no* `att`, and since
+the write is a whole-row upsert, that erased the attempt log for every device — the next
+current device then rebuilt `att` from `res` with every timestamp at 0. The mirror is
+gone, so a row can no longer be flattened.
 
 ## Appearance
 

@@ -178,8 +178,10 @@ rows = new Map();
     { secs: 20, auto: 0, coords: 1, mode: "all" }, 0, 2000), 2000);
   const sb = await settle(b);
   ok("stays missed", sb.res["7:1"] === "missed", sb.res);
-  ok("server agrees (via the compatibility mirror)", rows.get("clamp").data.P.res["7:1"] === "missed",
-     rows.get("clamp").data.P.res);
+  ok("server agrees", JSON.stringify(rows.get("clamp").data.P.att["7:1"]).includes("2"),
+     rows.get("clamp").data.P.att["7:1"]);
+  ok("and the row carries no res mirror to be flattened by",
+     rows.get("clamp").data.P.res === undefined, Object.keys(rows.get("clamp").data.P));
   await b.ctx.close();
 }
 
@@ -235,9 +237,7 @@ rows = new Map();
     { secs: 20, auto: 0, coords: 1, mode: "all" }, 0, 1000), 2000);
   await settle(a2);
   ok("recovers when the endpoint returns",
-     rows.get("clamp").data.P.res["1:0"] === "clean", rows.get("clamp"));
-  ok("and sends attempts, not just the mirror",
-     !!rows.get("clamp").data.P.att["1:0"], rows.get("clamp").data.P);
+     !!rows.get("clamp").data.P.att["1:0"], rows.get("clamp"));
   await a2.ctx.close();
 }
 
@@ -299,6 +299,61 @@ rows = new Map();
     ok("no page errors", errs.length === 0, errs);
     await ctx.close();
   }
+}
+
+console.log("\n8. a payload with no attempts cannot flatten the row");
+rows = new Map();
+{
+  const a = await device(S({ "4:1": "clean" }, {}, 2,
+    { secs: 0, auto: 0, coords: 1, mode: "all" }, 0, 5000), 5000);
+  await settle(a);
+  ok("the row has attempts to begin with", !!rows.get("clamp").data.P.att["4:1"],
+     rows.get("clamp").data.P);
+
+  // exactly what a device on the previous build used to write
+  rows.set("clamp", { id: "clamp", gen: 0,
+    data: { P: { res: { "4:1": "missed", "9:9": "missed" }, read: {}, cursor: 2 },
+            C: {}, T: 4000 } });
+
+  const st = await settle(a);
+  ok("the device keeps its own attempt", st.res["4:1"] !== undefined, st.res);
+  ok("and reads the legacy entries rather than ignoring them",
+     st.res["9:9"] === "missed", st.res);
+  ok("the row is restored to attempts", !!rows.get("clamp").data.P.att["4:1"],
+     rows.get("clamp").data.P);
+  ok("with the legacy ones carried in too", !!rows.get("clamp").data.P.att["9:9"],
+     Object.keys(rows.get("clamp").data.P.att || {}));
+  await a.ctx.close();
+}
+
+console.log("\n9. a failed push is retried without being prompted");
+rows = new Map();
+{
+  const a = await device(S({ "2:0": "clean" }, {}, 0,
+    { secs: 0, auto: 0, coords: 1, mode: "all" }, 0, 6000), 6000);
+  await settle(a);
+  ok("it starts out synced", !!rows.get("clamp"), [...rows.keys()]);
+
+  fail = true;
+  rows = new Map();
+  await a.page.evaluate(() => {
+    const T = window.__CT, P = T.state().P;
+    P.att["3:0"] = [[0, Date.now() - 6e5]];        // new work while the endpoint is down
+    T.sync();
+  });
+  await a.page.waitForFunction(
+    () => document.getElementById("sync").className === "sync err", null, { timeout: 15000 });
+  ok("the failure shows", true, null);
+  ok("nothing reached the server", !rows.get("clamp"), [...rows.keys()]);
+
+  fail = false;   // no further user action: the backoff must carry it up
+  await a.page.waitForFunction(
+    () => document.getElementById("sync").className === "sync idle", null, { timeout: 30000 });
+  ok("it retries on its own and lands", !!rows.get("clamp"), [...rows.keys()]);
+  ok("carrying the work made during the outage",
+     !!(rows.get("clamp").data.P.att || {})["3:0"],
+     Object.keys(rows.get("clamp").data.P.att || {}));
+  await a.ctx.close();
 }
 
 console.log("\nrequests to the mock endpoint: " + reqs);
