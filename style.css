@@ -204,8 +204,12 @@ main{flex:1;display:flex;flex-direction:column;min-width:0;overflow:hidden}
   box-shadow:0 30px 70px -22px #000}
 .card h2{margin:0 0 4px;font-size:22px;letter-spacing:-.02em;font-weight:600;text-wrap:balance}
 .card .sub{color:var(--tx2);font-size:14px;margin-bottom:20px}
-.opt{display:flex;align-items:center;gap:12px;padding:11px 0;border-top:1px solid var(--line)}
-.opt .lab{flex:1}
+/* the control keeps its natural width; when that leaves the label too little
+   room, the whole row wraps rather than squeezing it to one word a line */
+.opt{display:flex;flex-wrap:wrap;align-items:center;gap:10px 12px;padding:11px 0;
+  border-top:1px solid var(--line)}
+.opt .lab{flex:1 1 200px;min-width:0}
+.opt .seg{margin-left:auto}
 .opt .lab b{display:block;font-weight:550;font-size:14px}
 .opt .lab span{font-size:12.5px;color:var(--tx3)}
 .seg{display:flex;flex-wrap:wrap;justify-content:flex-end;background:var(--surface2);border:1px solid var(--line);border-radius:8px;padding:2px;gap:2px}

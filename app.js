@@ -283,6 +283,12 @@ function load(){try{var j=JSON.parse(localStorage.getItem(KEY)||"{}");
 function stash(){try{localStorage.setItem(KEY,JSON.stringify({P:withRes(),C:C,G:G,T:T}))}catch(e){}}
 function save(){if(!booting)T=Date.now();stash();cloudSoon()}
 load();
+/* Offer only what data/pieces.json actually carries. A stale cached copy would
+   otherwise leave a set selectable that silently drew as the default one. */
+var SETNAMES=["classic","merida","chessnut","staunty","tatiana","totoy","round"]
+  .filter(function(n){return PIECES&&PIECES[SETS[n]]});
+if(!SETNAMES.length)SETNAMES=["classic"];
+if(SETNAMES.indexOf(C.set)<0)C.set=SETNAMES[0];
 
 /* ============================== cloud sync ==============================
    One row, one user, no login: the publishable key is the credential.
@@ -918,10 +924,8 @@ function prefRows(){
                     ["forest","Forest",BOARDS.forest[0],BOARDS.forest[1]],
                     ["ocean","Ocean",BOARDS.ocean[0],BOARDS.ocean[1]],
                     ["lavender","Lavender",BOARDS.lavender[0],BOARDS.lavender[1]]],C.board)+"</div>"+
-    '<div class="opt"><div class="lab"><b>Piece set</b><span>All seven take the colour below.</span></div>'+
-    seg("set",[["classic","classic"],["merida","merida"],["chessnut","chessnut"],
-               ["staunty","staunty"],["tatiana","tatiana"],["totoy","totoy"],
-               ["round","round"]],C.set)+"</div>"+
+    '<div class="opt"><div class="lab"><b>Piece set</b><span>They all take the colour below.</span></div>'+
+    seg("set",SETNAMES.map(function(n){return [n,n]}),C.set)+"</div>"+
     '<div class="opt"><div class="lab"><b>Piece colour</b><span>Ink only; the shapes stay put.</span></div>'+
     swatch("pieces",[["classic","Black and white",INKS.classic[0],INKS.classic[1]],
                      ["warm","Warm",INKS.warm[0],INKS.warm[1]],

@@ -227,6 +227,25 @@ console.log("\n6. nothing bleeds over the edges of the board");
   ok("every light square down the rank is the same colour", uniform(px.light), px.light);
   ok("and every dark one", uniform(px.dark), px.dark);
   ok("the two square colours are actually different", !same(px.light[0], px.dark[0]), px);
+  // and the settings rows must not crush their labels to one word a line
+  await pp.click("#btnCfg");
+  await pp.waitForTimeout(250);
+  const rows = await pp.evaluate(() =>
+    [...document.querySelectorAll("#veilCard .opt")].map((o) => {
+      const lab = o.querySelector(".lab"), b = lab.querySelector("b");
+      const line = parseFloat(getComputedStyle(b).fontSize) * 1.6;
+      return { label: b.textContent,
+               w: Math.round(lab.getBoundingClientRect().width),
+               lines: Math.round(lab.getBoundingClientRect().height / line) };
+    }));
+  ok("every settings row has a label", rows.length >= 6, rows.length);
+  const squeezed = rows.filter((r) => r.w < 150 || r.lines > 4);
+  ok("no settings label is squeezed", squeezed.length === 0, squeezed);
+  ok("the piece-set row lists what the data has",
+     (await pp.evaluate(() => document.querySelectorAll('[data-seg="set"] button').length))
+       === (await pp.evaluate(() => Object.keys(window.PIECES).length)),
+     await pp.evaluate(() => [...document.querySelectorAll('[data-seg="set"] button')]
+       .map((b) => b.dataset.v)));
   await phone.close();
 }
 

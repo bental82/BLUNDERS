@@ -73,8 +73,10 @@
 <script src="./app.js"></script>
 <script>
 Promise.all([
-  fetch("./data/course.json").then(function(r){if(!r.ok)throw new Error(r.status);return r.json()}),
-  fetch("./data/pieces.json").then(function(r){if(!r.ok)throw new Error(r.status);return r.json()})
+  // no-cache: revalidate every load. A stale pieces.json against a fresh app.js
+  // leaves a piece set selectable that the data no longer has.
+  fetch("./data/course.json",{cache:"no-cache"}).then(function(r){if(!r.ok)throw new Error(r.status);return r.json()}),
+  fetch("./data/pieces.json",{cache:"no-cache"}).then(function(r){if(!r.ok)throw new Error(r.status);return r.json()})
 ]).then(function(v){
   window.DATA=v[0];window.PIECES=v[1];startTrainer();
 }).catch(function(e){

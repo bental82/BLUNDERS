@@ -217,8 +217,12 @@ main{flex:1;display:flex;flex-direction:column;min-width:0;overflow:hidden}
   box-shadow:0 30px 70px -22px #000}
 .card h2{margin:0 0 4px;font-size:22px;letter-spacing:-.02em;font-weight:600;text-wrap:balance}
 .card .sub{color:var(--tx2);font-size:14px;margin-bottom:20px}
-.opt{display:flex;align-items:center;gap:12px;padding:11px 0;border-top:1px solid var(--line)}
-.opt .lab{flex:1}
+/* the control keeps its natural width; when that leaves the label too little
+   room, the whole row wraps rather than squeezing it to one word a line */
+.opt{display:flex;flex-wrap:wrap;align-items:center;gap:10px 12px;padding:11px 0;
+  border-top:1px solid var(--line)}
+.opt .lab{flex:1 1 200px;min-width:0}
+.opt .seg{margin-left:auto}
 .opt .lab b{display:block;font-weight:550;font-size:14px}
 .opt .lab span{font-size:12.5px;color:var(--tx3)}
 .seg{display:flex;flex-wrap:wrap;justify-content:flex-end;background:var(--surface2);border:1px solid var(--line);border-radius:8px;padding:2px;gap:2px}
@@ -249,10 +253,9 @@ main{flex:1;display:flex;flex-direction:column;min-width:0;overflow:hidden}
 @media (max-width:760px){
   #rail{position:absolute;z-index:30;height:100dvh;box-shadow:0 0 60px #000a;
     transition:margin-left .22s ease,box-shadow .22s ease}
-  /* the closed rail is only slid out of view, so its shadow would go on
-     painting a dark band down the left edge of the board */
-  #app.railoff #rail{box-shadow:none}
-  #app.railoff #rail{margin-left:-294px}
+  /* closed, the rail is only slid out of view -- its shadow would otherwise
+     go on painting a dark band down the left edge of the board */
+  #app.railoff #rail{margin-left:-294px;box-shadow:none}
   .stage{padding:14px}
   .top{padding:9px 12px;gap:8px}
   .tally{display:none}
@@ -626,6 +629,12 @@ function load(){try{var j=JSON.parse(localStorage.getItem(KEY)||"{}");
 function stash(){try{localStorage.setItem(KEY,JSON.stringify({P:withRes(),C:C,G:G,T:T}))}catch(e){}}
 function save(){if(!booting)T=Date.now();stash();cloudSoon()}
 load();
+/* Offer only what data/pieces.json actually carries. A stale cached copy would
+   otherwise leave a set selectable that silently drew as the default one. */
+var SETNAMES=["classic","merida","chessnut","staunty","tatiana","totoy","round"]
+  .filter(function(n){return PIECES&&PIECES[SETS[n]]});
+if(!SETNAMES.length)SETNAMES=["classic"];
+if(SETNAMES.indexOf(C.set)<0)C.set=SETNAMES[0];
 
 /* ============================== cloud sync ==============================
    One row, one user, no login: the publishable key is the credential.
@@ -1261,10 +1270,8 @@ function prefRows(){
                     ["forest","Forest",BOARDS.forest[0],BOARDS.forest[1]],
                     ["ocean","Ocean",BOARDS.ocean[0],BOARDS.ocean[1]],
                     ["lavender","Lavender",BOARDS.lavender[0],BOARDS.lavender[1]]],C.board)+"</div>"+
-    '<div class="opt"><div class="lab"><b>Piece set</b><span>All seven take the colour below.</span></div>'+
-    seg("set",[["classic","classic"],["merida","merida"],["chessnut","chessnut"],
-               ["staunty","staunty"],["tatiana","tatiana"],["totoy","totoy"],
-               ["round","round"]],C.set)+"</div>"+
+    '<div class="opt"><div class="lab"><b>Piece set</b><span>They all take the colour below.</span></div>'+
+    seg("set",SETNAMES.map(function(n){return [n,n]}),C.set)+"</div>"+
     '<div class="opt"><div class="lab"><b>Piece colour</b><span>Ink only; the shapes stay put.</span></div>'+
     swatch("pieces",[["classic","Black and white",INKS.classic[0],INKS.classic[1]],
                      ["warm","Warm",INKS.warm[0],INKS.warm[1]],
