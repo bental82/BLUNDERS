@@ -199,6 +199,49 @@ ok("read and cursor survive", mig.readKept === 1 && mig.cursorKept === 3, mig);
 ok("old reds are clearable right away", mig.clearable && mig.clearable.ready === true, mig.clearable);
 await page2.close();
 
+console.log("\n7. the headline numbers add up");
+{
+  // a fresh page, seeded before boot, so the start card is deterministic
+  const page3 = await browser.newPage({ viewport: { width: 1500, height: 940 } });
+  page3.on("pageerror", (e) => errs.push("pageerror: " + e.message));
+  await page3.addInitScript(() => {
+    window.SYNC = {};
+    const t = Date.now() - 6e5, att = {};
+    for (let id = 10; id < 70; id++) att[id + ":0"] = [[0, t]];   // clean
+    for (let id = 70; id < 90; id++) att[id + ":0"] = [[2, t]];   // missed
+    localStorage.setItem("pbc.trainer.v1", JSON.stringify({
+      P: { att, read: {}, cursor: 0 },
+      C: { secs: 0, auto: 0, coords: 1, mode: "all" }, G: 0, T: 1000 }));
+  });
+  await page3.goto(url);
+  await page3.waitForFunction(() => !!window.__CT, null, { timeout: 20000 });
+  await page3.waitForTimeout(300);
+  const st = await page3.evaluate(() => {
+    const cells = [...document.querySelectorAll("#veilCard .stat > div")].map((d) => ({
+      n: d.querySelector(".n").textContent.trim(),
+      k: d.querySelector(".k").textContent.trim() }));
+    const T = window.__CT, D = window.DATA;
+    let ok = 0, no = 0, tot = 0;
+    D.forEach((it) => { if (it.kind !== "pos") return;
+      it.plies.forEach((p, i) => { if (!p.q) return; tot++;
+        const r = T.resOf(it.id + ":" + i);
+        if (r === "clean") ok++; else if (r === "missed" || r === "hint") no++; }); });
+    return { cells, ok, no, tot };
+  });
+  const by = Object.fromEntries(st.cells.map((c) => [c.k, c.n]));
+  ok("the card lists clean, missed, accuracy and covered",
+     ["clean", "missed", "accuracy", "covered"].every((k) => k in by), st.cells);
+  ok("clean matches the derived statuses", by.clean === String(st.ok), { by, st });
+  ok("missed matches too", by.missed === String(st.no), { by, st });
+  const done = st.ok + st.no;
+  ok("accuracy is clean over attempted",
+     by.accuracy === Math.round(st.ok / done * 100) + "%", { by, expect: Math.round(st.ok / done * 100) });
+  ok("covered is attempted over the whole course",
+     by.covered === Math.round(done / st.tot * 100) + "%", { by, expect: Math.round(done / st.tot * 100) });
+  ok("accuracy and covered are different questions", by.accuracy !== by.covered, by);
+  await page3.close();
+}
+
 console.log("\njs errors   " + errs.length);
 errs.slice(0, 8).forEach((e) => console.log("   " + e));
 await browser.close();

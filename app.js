@@ -257,7 +257,10 @@ var KEY="pbc.trainer.v1";
    move go green again without breaking the cross-device merge: appending is
    grow-only, overwriting a verdict would not be. */
 var P={att:{},read:{},cursor:0},
-    C={secs:20,auto:0,coords:1,mode:"all",board:"slate",set:"classic",pieces:"classic"};
+/* The clock defaults to off. The course asks for 10-15 minutes a puzzle and
+   says not to rush -- it names Puzzle Rush as the thing it is not -- so a
+   short clock on by default would train against the material. */
+    C={secs:0,auto:0,coords:1,mode:"all",board:"slate",set:"classic",pieces:"classic"};
 var CODE={clean:0,hint:1,missed:2},NAME=["clean","hint","missed"],ATTCAP=8;
 var REDEEM_MS=6*3600*1000;  /* and a later local day; see redeems() */
 var G=0,T=0;  /* reset generation; ms of the last deliberate local write */
@@ -265,7 +268,7 @@ var G=0,T=0;  /* reset generation; ms of the last deliberate local write */
    would make a laptop opened on Monday outrank the phone you actually worked
    on, and you would lose your place; so nothing stamps T until boot is done. */
 var booting=true;
-function defaults(){return {secs:20,auto:0,coords:1,mode:"all",board:"slate",
+function defaults(){return {secs:0,auto:0,coords:1,mode:"all",board:"slate",
                             set:"classic",pieces:"classic"}}
 /* Older saves (and any device still on the previous build) carry P.res, a
    single verdict per move. Read it as one attempt of unknown age, which makes
@@ -499,17 +502,7 @@ function renderRail(){
     jumpTo(+this.dataset.i)});
   syncRail();
 }
-/* The rail carries a status dot per item, but it is closed on phones and
-   hideable everywhere, so the current item's status also lives in the top bar. */
-function syncItemDot(){
-  var el=$("itemDot");if(!el)return;
-  var it=DATA[S.order[S.k]];
-  var st=it?statusOf(it):"";
-  el.className="itemdot"+(st?" s-"+st:"");
-  el.title="This exercise: "+(st||"not yet attempted");
-}
 function syncRail(){
-  syncItemDot();
   var list=$("railList"),rows=list.querySelectorAll(".row");
   for(var j=0;j<rows.length;j++){
     var i=+rows[j].dataset.i,it=DATA[i],st=statusOf(it);
@@ -548,11 +541,14 @@ function startTimer(){
   },80);
 }
 function stopTimer(){if(S.timer){clearInterval(S.timer);S.timer=null}}
+/* Running out records nothing. The course asks you to take 10-15 minutes over
+   a puzzle, so a clock this app added is in no position to call a slow answer
+   wrong. Ask to be shown and that still counts, because that is giving up. */
 function timeUp(){
   if(S.phase!=="quiz")return;
   var p=item().plies[S.ply];
   board.locked=true;board.legal=null;board.select(-1);
-  mark(p,"missed");missedMove(p,"Out of time.");
+  missedMove(p,"Out of time.");
 }
 
 /* ============================== flow ============================== */
@@ -564,7 +560,6 @@ function loadItem(){
   P.cursor=S.order[S.k];save();
   $("crumbC").textContent=it.chap.replace(/^\d+\.\s*/,"");
   $("crumbT").textContent=it.title;
-  $("counter").textContent=(S.k+1)+" / "+S.order.length;
   renderTally();syncRail();
   if(it.kind!=="pos"){showLesson(it);return}
   $("lessonwrap").style.display="none";$("stage").style.display="";
@@ -659,7 +654,7 @@ function reveal(){
   var fromMissed=(S.phase==="missed");
   var why=(fromMissed&&S.why)?S.why:"Shown.";
   board.locked=true;board.legal=null;board.select(-1);stopTimer();
-  if(!fromMissed)mark(p,"missed");   /* already recorded when the miss happened */
+  if(!S.marked)mark(p,"missed");   /* a wrong move already recorded itself */
   teach(p,why);
 }
 /* Wrong, or out of time: say so, put the position back, and stop there. */
@@ -771,7 +766,9 @@ function renderPanel(){
     h+='<div class="verdict '+(tmo2?"v-nu":"v-no")+'"><span class="mk">'+
        (tmo2?ICO.nu:ICO.no)+"</span>"+esc(S.why||"")+"</div>";
     if(ctx)h+='<div class="prose" style="opacity:.6">'+ctx+"</div>";
-    h+='<div class="hintline">Still hidden. Try it again, or ask to be shown.</div>';
+    h+='<div class="hintline">Still hidden. Try it again, or ask to be shown.'+
+       (tmo2&&!S.marked?" Running out is not counted against you \u2014 asking to be shown is.":"")+
+       "</div>";
     h+=redeemNote();
   } else if(S.phase==="taught"){
     var tmo=(S.why==="Out of time.");
@@ -924,8 +921,9 @@ function seg(name,opts,val){
   }).join("")+"</div>";
 }
 function prefRows(){
-  return '<div class="opt"><div class="lab"><b>Clock</b><span>Per position; later moves in a line get 75%. Running out counts as a miss.</span></div>'+
-    seg("secs",[[0,"off"],[10,"10s"],[20,"20s"],[30,"30s"],[45,"45s"]],C.secs)+"</div>"+
+  return '<div class="opt"><div class="lab"><b>Clock</b><span>Off by default \u2014 the course asks for 10\u201315 minutes a puzzle. Later moves in a line get 75%. Running out is not counted against you.</span></div>'+
+    seg("secs",[[0,"off"],[30,"30s"],[120,"2m"],[300,"5m"],[600,"10m"],
+                [900,"15m"]],C.secs)+"</div>"+
     '<div class="opt"><div class="lab"><b>Work through</b><span>all &middot; only untouched &middot; only missed</span></div>'+
     seg("mode",[["all","all"],["todo","new"],["missed","missed"]],C.mode)+"</div>"+
     '<div class="opt"><div class="lab"><b>Auto-advance</b><span>After a correct answer.</span></div>'+
@@ -953,6 +951,8 @@ function overlayStart(){
         DATA.length+" items &middot; "+t.tot+" quiz moves</div>"+
         '<div class="stat"><div><div class="n">'+t.ok+'</div><div class="k">clean</div></div>'+
         '<div><div class="n">'+t.no+'</div><div class="k">missed</div></div>'+
+        '<div><div class="n">'+(done?Math.round(t.ok/done*100)+"%":"\u2014")+
+        '</div><div class="k">accuracy</div></div>'+
         '<div><div class="n">'+Math.round(done/t.tot*100)+'%</div><div class="k">covered</div></div></div>'+
         prefRows()+
         '<div class="cardfoot"><button class="btn pri" data-act="go">'+
@@ -975,7 +975,7 @@ function overlaySettings(){
   openVeil(h,function(act){
     if(act==="close"){var cur=S.order[S.k];buildOrder();var k=S.order.indexOf(cur);
       S.k=(k<0)?Math.min(S.k,S.order.length-1):k;closeVeil();
-      $("counter").textContent=(S.k+1)+" / "+S.order.length;syncRail()}
+      syncRail()}
     if(act==="wipe"){if(confirm("Erase all progress \u2014 on every device?")){resetAll();
       renderRail();renderTally();closeVeil()}}
   });

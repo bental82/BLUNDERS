@@ -13,7 +13,9 @@ course, where the arrows the author drew and the clock you're under *are* the le
   being asked, shown the moment you answer, so they explain rather than give away.
 - Plays the opponent's last move to you, animated, before the clock starts. For a
   blunder-check course, *what just changed* is the question.
-- Puts you on a clock — but holds it while there's setup text to read.
+- Can put you on a clock — **off by default**, because the course asks for 10–15 minutes a
+  puzzle and names Puzzle Rush as what it isn't. When on, it's held while there's setup text
+  to read, and running out is never counted against you.
 - Never hands you the move: a wrong answer or a timeout says so and stops. You have to
   ask to be shown.
 - Plays out the traps. Answer with a move the author tagged `??` and the refutation
@@ -46,19 +48,30 @@ is yours alone now). Turn on Vercel Deployment Protection and keep the repo priv
 
 | you | it |
 |---|---|
-| still reading the setup | clock held, board locked, **Start** on <kbd>↵</kbd> |
+| still reading the setup | clock held (if on), board locked, **Start** on <kbd>↵</kbd> |
 | answer correctly | the author's arrows and commentary land as the explanation |
-| answer wrong / run out of time | says so, position back, move withheld |
+| answer wrong | *That is not it.* — position back, move withheld, recorded as missed |
+| run out of time | *Out of time.* — same, but **not recorded**; the clock is this app's, not the course's |
 | play a move tagged `??` | the refutation plays out, then **Show the right move** |
 | press **Show me** / <kbd>R</kbd> | the move, arrows, commentary, side lines |
 
 The clock is only held where there's something to read, and only once per move — a retry
-puts you straight back on it.
+puts you straight back on it. Options run from 30s to 15m; the author's own guidance is
+*"give yourself a maximum of 10–15 minutes per puzzle"*, so anything shorter is a drill you
+chose, not the course speaking.
 
 ## Progress
 
 Kept per quiz move as `clean` / `hint` / `missed`, plus which lessons you've read, your
-cursor and your settings.
+cursor and your settings. Counted per **quiz move**, not per exercise — 835 is the
+denominator, and a hint counts as missed.
+
+The start card shows four numbers, of which two are easily confused:
+
+| | |
+|---|---|
+| **accuracy** | clean ÷ attempted — how often you were right |
+| **covered** | attempted ÷ 835 — how much of the course you've seen |
 
 **Turning a red exercise green.** A move stays red until you answer it clean on a **later
 local day**, at least **six hours** after the miss; miss it again and it's red again.

@@ -76,7 +76,7 @@ async function go(idx, secs) {
 }
 
 console.log("\n1. the clock waits for the setup text");
-await go(WITH_TEXT, 20);
+await go(WITH_TEXT, 30);
 await settle(["ready", "quiz"]);
 {
   const s = await st();
@@ -129,12 +129,12 @@ await settle(["missed", "trap"]);
 }
 
 console.log("\n5. running out of time does not show it either");
-await go(WITH_TEXT + 1, 10);
+await go(WITH_TEXT + 1, 30);
 await settle(["ready", "quiz"]);
 if ((await st()).phase === "ready") await page.keyboard.press("Enter");
 await settle(["quiz"]);
 const a2 = await answer();
-await page.evaluate(() => window.__skew(11000));    // jump the clock past the budget
+await page.evaluate(() => window.__skew(31000));    // jump the clock past the budget
 await settle(["missed"], 5000);
 {
   const s = await st();
@@ -142,6 +142,29 @@ await settle(["missed"], 5000);
   ok("says it timed out", /time/i.test(s.panel), s.panel.slice(0, 60));
   ok("the answer is still hidden", !s.panel.includes(a2.san), { san: a2.san, panel: s.panel });
   ok("clock stopped", !s.ticking, s);
+  // the course asks for 10-15 minutes a puzzle, so a timeout is not an attempt
+  const rec = await page.evaluate(() => {
+    const T = window.__CT, key = T.item().id + ":" + T.S.ply;
+    return { attempts: (T.state().P.att[key] || []).length, status: T.resOf(key) };
+  });
+  ok("running out records no attempt", rec.attempts === 0, rec);
+  ok("and leaves the move untouched", rec.status === undefined, rec);
+}
+
+console.log("\n5b. but asking to be shown after a timeout does count");
+{
+  const before = await page.evaluate(() => {
+    const T = window.__CT; return T.item().id + ":" + T.S.ply;
+  });
+  await page.evaluate(() => window.__CT.reveal());
+  await settle(["taught"]);
+  const rec = await page.evaluate((key) => ({
+    attempts: (window.__CT.state().P.att[key] || []).length,
+    status: window.__CT.resOf(key) }), before);
+  ok("asking is recorded", rec.attempts === 1, rec);
+  ok("and counts as missed", rec.status === "missed", rec);
+  await page.evaluate(() => window.__CT.retry());
+  await settle(["quiz"]);
 }
 
 console.log("\n6. a retry does not make you read it again");
@@ -163,7 +186,7 @@ await settle(["solved", "idle", "done"]);
 }
 
 console.log("\n8. nothing to read means no gate");
-await go(NO_TEXT, 20);
+await go(NO_TEXT, 30);
 await settle(["quiz"], 9000);
 {
   const s = await st();
