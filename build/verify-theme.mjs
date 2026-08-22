@@ -246,6 +246,29 @@ console.log("\n6. nothing bleeds over the edges of the board");
        === (await pp.evaluate(() => Object.keys(window.PIECES).length)),
      await pp.evaluate(() => [...document.querySelectorAll('[data-seg="set"] button')]
        .map((b) => b.dataset.v)));
+  // the commentary under the board must be reachable, not clipped
+  await pp.click('[data-act="close"]').catch(() => {});
+  await pp.waitForTimeout(150);
+  await pp.evaluate(() => { window.__CT.state().C.secs = 0; window.__CT.jumpTo(45); });
+  await pp.waitForFunction(() => ["quiz", "ready"].includes(window.__CT.S.phase), null, { timeout: 20000 });
+  await pp.evaluate(() => { if (window.__CT.S.phase === "ready") window.__CT.begin(); });
+  await pp.evaluate(() => window.__CT.reveal());
+  await pp.waitForFunction(() => window.__CT.S.phase === "taught", null, { timeout: 20000 });
+  await pp.waitForTimeout(350);
+  const scroll = await pp.evaluate(() => {
+    const stage = document.getElementById("stage");
+    const panel = document.querySelector(".panel");
+    const clipped = panel.scrollHeight > panel.clientHeight + 2;
+    stage.scrollTop = 99999;
+    const last = document.getElementById("panel").lastElementChild;
+    const r = last ? last.getBoundingClientRect() : null;
+    return { clipped, over: stage.scrollHeight > stage.clientHeight + 2,
+             reachable: r ? r.bottom <= innerHeight + 2 : null,
+             blocks: document.getElementById("panel").children.length };
+  });
+  ok("the wordiest position really does overflow", scroll.over, scroll);
+  ok("the panel does not clip its own text", scroll.clipped === false, scroll);
+  ok("and the last block can be scrolled to", scroll.reachable === true, scroll);
   await phone.close();
 }
 

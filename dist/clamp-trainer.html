@@ -245,10 +245,12 @@ main{flex:1;display:flex;flex-direction:column;min-width:0;overflow:hidden}
 .toast.on{opacity:1}
 
 @media (max-width:1080px){
-  .stage{flex-direction:column;overflow-y:auto;gap:18px}
-  .panel{max-width:none}
-  .pscroll{overflow:visible}
-  .boardcol{align-self:center}
+  /* stacked, the stage is the only scroller: the panel must take its natural
+     height and hand the overflow up, or it silently clips the commentary */
+  .stage{flex-direction:column;overflow-y:auto;overscroll-behavior:contain;gap:18px}
+  .panel{max-width:none;flex:none;overflow:visible}
+  .pscroll{flex:none;overflow:visible;padding-right:0}
+  .boardcol{align-self:center;flex:none}
 }
 @media (max-width:760px){
   #rail{position:absolute;z-index:30;height:100dvh;box-shadow:0 0 60px #000a;
