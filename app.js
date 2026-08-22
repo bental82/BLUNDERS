@@ -15,7 +15,7 @@ var COL={R:"#e5484d",G:"#3fb950",B:"#4d8ff5",Y:"#e3b341"};
 var BOARDS={
   slate:   ["#d6dae0","#78838f","#5d6672","#e6eaee"],
   walnut:  ["#e9d5b6","#9c6b43","#7a5433","#f4e6d2"],
-  forest:  ["#e9edcc","#6f8f57","#5b6f45","#eef3dd"],
+  forest:  ["#709d67","#4e815e","#38603f","#dcead6"],
   ocean:   ["#dbe6ee","#6b8ba8","#56708a","#eaf2f8"],
   lavender:["#d5d3e6","#a8a4c6","#6b6688","#f0eef8"]
 };
@@ -28,7 +28,7 @@ var INKS={
   warm:   ["#f4e7d3","#382a20","#e5d5bd","#5f4a3a"],
   indigo: ["#f2f0fa","#443e5c","#e2dff0","#6a6289"]
 };
-var SETS={classic:"cburnett",round:"round",chessnut:"chessnut",merida:"merida",
+var SETS={classic:"cburnett",round:"round",chessnut:"chessnut",
           totoy:"totoy",staunty:"staunty",tatiana:"tatiana"};
 /* The Cburnett artwork carries its colours as both presentation attributes and
    inline styles, in three spellings, so inline style beats any CSS rule we
@@ -285,7 +285,7 @@ function save(){if(!booting)T=Date.now();stash();cloudSoon()}
 load();
 /* Offer only what data/pieces.json actually carries. A stale cached copy would
    otherwise leave a set selectable that silently drew as the default one. */
-var SETNAMES=["classic","merida","chessnut","staunty","tatiana","totoy","round"]
+var SETNAMES=["classic","staunty","tatiana","chessnut","totoy","round"]
   .filter(function(n){return PIECES&&PIECES[SETS[n]]});
 if(!SETNAMES.length)SETNAMES=["classic"];
 if(SETNAMES.indexOf(C.set)<0)C.set=SETNAMES[0];

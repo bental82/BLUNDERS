@@ -29,7 +29,7 @@ import json, os, re, urllib.request
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, "build", "pieces-external.json")
 BASE = "https://raw.githubusercontent.com/lichess-org/lila/master/public/piece/"
-SETS = ["chessnut", "totoy", "staunty", "tatiana", "merida"]
+SETS = ["chessnut", "totoy", "staunty", "tatiana"]
 CODES = {"P": "wP", "N": "wN", "B": "wB", "R": "wR", "Q": "wQ", "K": "wK",
          "p": "bP", "n": "bN", "b": "bB", "r": "bR", "q": "bQ", "k": "bK"}
 

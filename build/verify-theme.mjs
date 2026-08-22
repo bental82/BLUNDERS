@@ -119,7 +119,7 @@ console.log("\n3b. every piece set swaps the artwork, and every one takes ink");
 await pick("board", "slate"); await pick("pieces", "classic");
 const staunton = await look();
 const seen = new Map([["classic", staunton.shape]]);
-for (const t of ["round", "chessnut", "merida", "staunty", "tatiana", "totoy"]) {
+for (const t of ["staunty", "tatiana", "chessnut", "totoy", "round"]) {
   await pick("set", t);
   const l = await look();
   ok(t + ": the drawing changed", l.shape !== staunton.shape && l.shape.length > 40, l.shape.slice(0, 50));

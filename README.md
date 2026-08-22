@@ -109,7 +109,7 @@ Three independent rows in Settings, in any combination:
 | | |
 |---|---|
 | **Board** | Slate, Walnut, Forest, Ocean, Lavender |
-| **Piece set** | classic, merida, chessnut, staunty, tatiana, totoy, round |
+| **Piece set** | classic, staunty, tatiana, chessnut, totoy, round |
 | **Piece colour** | Black and white, Warm, Indigo |
 
 Slate + classic + black-and-white is the original look and stays the default.
@@ -118,7 +118,7 @@ Squares and coordinates are CSS variables and repaint for free. Pieces can't be:
 artwork carries colours as presentation attributes *and* inline styles, and inline styles
 beat any stylesheet rule. So every set is normalised at build time onto four tokens —
 `#fff` / `#ececec` light, `#000` / `#3c3c3c` dark — and `svgFor()` substitutes those as a
-piece is drawn. One substitution recolours all seven sets.
+piece is drawn. One substitution recolours all six sets.
 
 All 32 pieces share one document, so `pieces.py` namespaces element ids per piece and
 drops unreferenced ones; a set whose `url(#…)` doesn't resolve within its own piece is
@@ -155,7 +155,7 @@ index.html            served entry point
 app.js                the whole app; defines startTrainer()
 style.css
 data/course.json      348 items, generated
-data/pieces.json      seven piece sets, generated
+data/pieces.json      six piece sets, generated
 db/schema.sql         the Supabase table
 build/extract.py      PGN  -> data/course.json
 build/pieces.py       merges every piece set -> data/pieces.json
@@ -206,7 +206,6 @@ Course content © CM Can Kabadayı, *Preventing Blunders in Chess* (Chessable).
 | piece set | by | licence |
 |---|---|---|
 | classic | [Colin M.L. Burnett](https://en.wikipedia.org/wiki/User:Cburnett), via python-chess | CC BY-SA 3.0 |
-| merida | Armando Hernandez Marroquin | GPLv2+ |
 | chessnut | [Alexis Luengas](https://github.com/LexLuengas/chessnut-pieces) | Apache 2.0 |
 | totoy | Kosal Sen | CC BY 4.0 |
 | staunty | sadsnake1 | CC BY-NC-SA 4.0 |
