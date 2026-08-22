@@ -29,7 +29,7 @@ var INKS={
   indigo: ["#f2f0fa","#443e5c","#e2dff0","#6a6289"]
 };
 var SETS={classic:"cburnett",round:"round",chessnut:"chessnut",
-          totoy:"totoy",staunty:"staunty",tatiana:"tatiana"};
+          totoy:"totoy",staunty:"staunty",tatiana:"tatiana",riohacha:"riohacha"};
 /* The Cburnett artwork carries its colours as both presentation attributes and
    inline styles, in three spellings, so inline style beats any CSS rule we
    could write. Substituting the literals is the one approach that reaches all
@@ -285,7 +285,7 @@ function save(){if(!booting)T=Date.now();stash();cloudSoon()}
 load();
 /* Offer only what data/pieces.json actually carries. A stale cached copy would
    otherwise leave a set selectable that silently drew as the default one. */
-var SETNAMES=["classic","staunty","tatiana","chessnut","totoy","round"]
+var SETNAMES=["classic","staunty","tatiana","chessnut","totoy","riohacha","round"]
   .filter(function(n){return PIECES&&PIECES[SETS[n]]});
 if(!SETNAMES.length)SETNAMES=["classic"];
 if(SETNAMES.indexOf(C.set)<0)C.set=SETNAMES[0];
@@ -499,7 +499,17 @@ function renderRail(){
     jumpTo(+this.dataset.i)});
   syncRail();
 }
+/* The rail carries a status dot per item, but it is closed on phones and
+   hideable everywhere, so the current item's status also lives in the top bar. */
+function syncItemDot(){
+  var el=$("itemDot");if(!el)return;
+  var it=DATA[S.order[S.k]];
+  var st=it?statusOf(it):"";
+  el.className="itemdot"+(st?" s-"+st:"");
+  el.title="This exercise: "+(st||"not yet attempted");
+}
 function syncRail(){
+  syncItemDot();
   var list=$("railList"),rows=list.querySelectorAll(".row");
   for(var j=0;j<rows.length;j++){
     var i=+rows[j].dataset.i,it=DATA[i],st=statusOf(it);
@@ -889,7 +899,11 @@ function renderTally(){
       if(r==="clean")ok++;else if(r==="missed"||r==="hint")no++;
     }
   });
-  $("tally").innerHTML='<span class="ok">'+ok+' clean</span><span class="no">'+no+" missed</span>";
+  /* the words are separable so narrow screens can keep the numbers and drop
+     them, falling back to "clean / missed" read as a ratio */
+  $("tally").innerHTML='<span class="ok">'+ok+'<i> clean</i></span>'+
+                       '<span class="sep">/</span>'+
+                       '<span class="no">'+no+'<i> missed</i></span>';
   return {ok:ok,no:no,tot:tot};
 }
 

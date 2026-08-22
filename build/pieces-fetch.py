@@ -4,21 +4,24 @@
     python3 build/pieces-fetch.py            # writes build/pieces-external.json
 
 Sets come from lichess (lichess-org/lila, public/piece/<name>/), whose
-COPYING.md documents a licence for every one. Only sets that are structurally
-safe to inline are taken: no <style> blocks, and no colour that cannot be
-reduced to the four tokens below. Element ids are allowed -- build/pieces.py
-namespaces them per piece, since all 32 share one document -- but a set whose
-ids are not self-contained is rejected there.
+COPYING.md records the terms for each. Only sets that are structurally safe to
+inline are taken: no <style> blocks, and no colour that cannot be reduced to
+the four tokens below. Element ids are allowed -- build/pieces.py namespaces
+them per piece, since all 32 share one document -- but a set whose ids are not
+self-contained is rejected there.
 
-  chessnut  Alexis Luengas          Apache 2.0
-  totoy     Kosal Sen               CC BY 4.0
-  merida    Armando Hernandez Marroquin  GPLv2+
-  staunty   sadsnake1               CC BY-NC-SA 4.0
-  tatiana   sadsnake1               CC BY-NC-SA 4.0
+  chessnut  Alexis Luengas   Apache 2.0
+  totoy     Kosal Sen        CC BY 4.0
+  staunty   sadsnake1        CC BY-NC-SA 4.0
+  tatiana   sadsnake1        CC BY-NC-SA 4.0
+  riohacha  unrecorded       unrecorded
 
-The two CC BY-NC-SA sets are free for non-commercial use, which is what this
-private trainer is; the other two carry no such restriction. Attribution for
-all four is in the README.
+staunty and tatiana are non-commercial-only, which is what this private
+trainer is; chessnut and totoy carry no such restriction. riohacha is the odd
+one out: lichess lists it with both the author and the licence column empty,
+so it comes with no stated terms at all. It is here because it was asked for,
+and a private trainer is the only use it should get. Attribution is in the
+README.
 
 Every set draws with its own palette, so each colour is mapped by luminance
 onto the four tokens app.js recolours: #ffffff and #ececec for the light
@@ -29,7 +32,7 @@ import json, os, re, urllib.request
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, "build", "pieces-external.json")
 BASE = "https://raw.githubusercontent.com/lichess-org/lila/master/public/piece/"
-SETS = ["chessnut", "totoy", "staunty", "tatiana"]
+SETS = ["chessnut", "totoy", "staunty", "tatiana", "riohacha"]
 CODES = {"P": "wP", "N": "wN", "B": "wB", "R": "wR", "Q": "wQ", "K": "wK",
          "p": "bP", "n": "bN", "b": "bB", "r": "bR", "q": "bQ", "k": "bK"}
 

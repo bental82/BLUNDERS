@@ -119,7 +119,7 @@ console.log("\n3b. every piece set swaps the artwork, and every one takes ink");
 await pick("board", "slate"); await pick("pieces", "classic");
 const staunton = await look();
 const seen = new Map([["classic", staunton.shape]]);
-for (const t of ["staunty", "tatiana", "chessnut", "totoy", "round"]) {
+for (const t of ["staunty", "tatiana", "chessnut", "totoy", "riohacha", "round"]) {
   await pick("set", t);
   const l = await look();
   ok(t + ": the drawing changed", l.shape !== staunton.shape && l.shape.length > 40, l.shape.slice(0, 50));
@@ -269,6 +269,42 @@ console.log("\n6. nothing bleeds over the edges of the board");
   ok("the wordiest position really does overflow", scroll.over, scroll);
   ok("the panel does not clip its own text", scroll.clipped === false, scroll);
   ok("and the last block can be scrolled to", scroll.reachable === true, scroll);
+  // the top bar must carry the score and the current exercise's status, and fit
+  await pp.evaluate(() => { window.__CT.jumpTo(45); });
+  await pp.waitForTimeout(250);
+  const bar = await pp.evaluate(() => {
+    const top = document.querySelector(".top");
+    return { overflow: top.scrollWidth > top.clientWidth + 1,
+             doc: document.documentElement.scrollWidth > innerWidth + 1,
+             tallyShown: getComputedStyle(document.getElementById("tally")).display !== "none",
+             dotShown: getComputedStyle(document.getElementById("itemDot")).display !== "none" };
+  });
+  ok("the score is on screen on a phone", bar.tallyShown, bar);
+  ok("so is the exercise status dot", bar.dotShown, bar);
+  ok("and the bar still fits", !bar.overflow && !bar.doc, bar);
+
+  const dot = await pp.evaluate(() => {
+    const T = window.__CT, P = T.state().P, out = {};
+    const it = T.item();
+    const plies = it.plies.map((p, n) => [p, n]).filter(([p]) => p.q).map(([, n]) => n);
+    const cls = () => document.getElementById("itemDot").className;
+    // every case is read the same way: change the state, re-enter the item
+    plies.forEach((n) => delete P.att[it.id + ":" + n]);
+    T.jumpTo(45); out.fresh = cls();
+    const t = Date.now() - 6e5;
+    plies.forEach((n) => { P.att[it.id + ":" + n] = [[0, t]]; });
+    T.jumpTo(45); out.clean = cls();
+    plies.forEach((n) => { P.att[it.id + ":" + n] = [[2, t]]; });
+    T.jumpTo(45); out.missed = cls();
+    plies.forEach((n) => { P.att[it.id + ":" + n] = [[1, t]]; });
+    T.jumpTo(45); out.hint = cls();
+    plies.forEach((n) => delete P.att[it.id + ":" + n]);
+    return out;
+  });
+  ok("untouched shows no status", dot.fresh === "itemdot", dot);
+  ok("all clean shows green", dot.clean === "itemdot s-clean", dot);
+  ok("missed shows red", dot.missed === "itemdot s-missed", dot);
+  ok("hint shows amber", dot.hint === "itemdot s-hint", dot);
   await phone.close();
 }
 

@@ -109,7 +109,7 @@ Three independent rows in Settings, in any combination:
 | | |
 |---|---|
 | **Board** | Slate, Walnut, Forest, Ocean, Lavender |
-| **Piece set** | classic, staunty, tatiana, chessnut, totoy, round |
+| **Piece set** | classic, staunty, tatiana, chessnut, totoy, riohacha, round |
 | **Piece colour** | Black and white, Warm, Indigo |
 
 Slate + classic + black-and-white is the original look and stays the default.
@@ -118,7 +118,7 @@ Squares and coordinates are CSS variables and repaint for free. Pieces can't be:
 artwork carries colours as presentation attributes *and* inline styles, and inline styles
 beat any stylesheet rule. So every set is normalised at build time onto four tokens —
 `#fff` / `#ececec` light, `#000` / `#3c3c3c` dark — and `svgFor()` substitutes those as a
-piece is drawn. One substitution recolours all six sets.
+piece is drawn. One substitution recolours all seven sets.
 
 All 32 pieces share one document, so `pieces.py` namespaces element ids per piece and
 drops unreferenced ones; a set whose `url(#…)` doesn't resolve within its own piece is
@@ -155,7 +155,7 @@ index.html            served entry point
 app.js                the whole app; defines startTrainer()
 style.css
 data/course.json      348 items, generated
-data/pieces.json      six piece sets, generated
+data/pieces.json      seven piece sets, generated
 db/schema.sql         the Supabase table
 build/extract.py      PGN  -> data/course.json
 build/pieces.py       merges every piece set -> data/pieces.json
@@ -208,11 +208,14 @@ Course content © CM Can Kabadayı, *Preventing Blunders in Chess* (Chessable).
 | classic | [Colin M.L. Burnett](https://en.wikipedia.org/wiki/User:Cburnett), via python-chess | CC BY-SA 3.0 |
 | chessnut | [Alexis Luengas](https://github.com/LexLuengas/chessnut-pieces) | Apache 2.0 |
 | totoy | Kosal Sen | CC BY 4.0 |
+| riohacha | *unrecorded* | *unrecorded* |
 | staunty | sadsnake1 | CC BY-NC-SA 4.0 |
 | tatiana | sadsnake1 | CC BY-NC-SA 4.0 |
 | round | drawn for this repo (`build/pieces-round.py`) | — |
 
 The fetched sets come from [lichess](https://github.com/lichess-org/lila/tree/master/public/piece),
 whose `COPYING.md` is the source for the attributions above. `staunty` and `tatiana` are
-non-commercial-only, which this private trainer is; the rest carry no such restriction.
-Board colours were chosen for this repo.
+non-commercial-only, which this private trainer is; `chessnut` and `totoy` carry no such
+restriction. **`riohacha` is listed by lichess with the author and licence columns both
+empty**, so unlike the rest it carries no stated terms at all — it is here by request, and
+a private trainer is the only use it should get. Board colours were chosen for this repo.
