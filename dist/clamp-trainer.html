@@ -816,8 +816,8 @@ function resetAll(){
 }
 
 var S={order:[],k:0,ply:0,phase:"idle",failed:false,hinted:false,parts:[],
-       pendAnn:null,explore:null,trapAlt:null,trapK:0,timer:null,why:"",ready4:-1,
-       marked:false};
+       pendAnn:null,explore:null,trapAlt:null,trapK:0,trapAuto:false,timer:null,
+       why:"",ready4:-1,marked:false};
 var board=new Board($("board"));
 
 function item(){return DATA[S.order[S.k]]}
@@ -952,6 +952,7 @@ function timeUp(){
 function loadItem(){
   stopTimer();board.locked=true;board.legal=null;board.annotate([],[]);
   S.ply=0;S.parts=[];S.failed=false;S.hinted=false;S.explore=null;S.trapAlt=null;S.pendAnn=null;
+  S.trapAuto=false;
   S.ready4=-1;
   var it=item();
   P.cursor=S.order[S.k];save();
@@ -1071,17 +1072,18 @@ function teach(p,why){
   renderPanel();
 }
 function playTrap(p,alt){
-  S.phase="trap";S.trapAlt=alt;S.trapK=0;
+  S.phase="trap";S.trapAlt=alt;S.trapK=0;S.trapAuto=true;
   board.set(p.f);
   var i=0;
   (function run(){
-    if(S.phase!=="trap")return;
+    if(S.phase!=="trap"||!S.trapAuto)return;
     if(i>=alt.line.length){renderPanel();return}
     board.move(alt.line[i].u);
     var st=alt.line[i];
     board.annotate(st.cal||[],st.csl||[]);
     S.trapK=i;i++;renderPanel();
-    setTimeout(run,d(st.t?1250:750));
+    /* This is the explanation, not a transition -- it needs reading time. */
+    setTimeout(run,d(st.t?2100:1200));
   })();
 }
 /* One ask, one entry. Later calls within the same ask only make it worse --
@@ -1250,7 +1252,17 @@ function wirePanel(){
     b.addEventListener("click",function(e){
       e.stopPropagation();
       var ns=this.parentNode.dataset.ns,st=+this.dataset.step;
-      if(ns==="trap")return;
+      if(ns==="trap"){
+        /* Stepping the refutation by hand. Taking control stops the replay,
+           otherwise the next tick would move the board out from under you. */
+        var at=S.trapAlt;if(!at||st<0)return;
+        S.trapAuto=false;S.trapK=st;
+        var pt=item().plies[S.ply];
+        board.set(pt.f);
+        for(var j=0;j<=st;j++)board.move(at.line[j].u);
+        board.annotate(at.line[st].cal||[],at.line[st].csl||[]);
+        renderPanel();return;
+      }
       var idx=+ns.slice(3),p=item().plies[S.ply],a=p.alts[idx];
       if(st<0){backToAnswer();return}
       S.explore={i:idx,k:st};
@@ -1269,11 +1281,15 @@ function wirePanel(){
     })});
 }
 function buttons(){
-  var q=(S.phase==="quiz"),rd=(S.phase==="ready"),ms=(S.phase==="missed");
+  var q=(S.phase==="quiz"),rd=(S.phase==="ready"),ms=(S.phase==="missed"),
+      tr=(S.phase==="trap");
   $("bHint").style.display=q?"":"none";
-  $("bReveal").style.display=(q||ms)?"":"none";
+  /* The secondary action, whatever it is in this phase. After a trap that is
+     another go at the position -- the refutation showed why your move loses,
+     which is not the same as being told the right one. */
+  $("bReveal").style.display=(q||ms||tr)?"":"none";
   $("bHint").disabled=S.hinted;
-  $("bReveal").textContent=(ms||S.hinted)?"Show me":"Give up";
+  $("bReveal").textContent=tr?"Try again":((ms||S.hinted)?"Show me":"Give up");
   var n=$("bNext");
   n.className="btn"+(q?"":" pri");
   n.innerHTML=(rd?"Start":
@@ -1451,7 +1467,10 @@ $("btnRail").addEventListener("click",function(){$("app").classList.toggle("rail
   setTimeout(fit,250)});
 $("btnCfg").addEventListener("click",overlaySettings);
 $("bHint").addEventListener("click",hint);
-$("bReveal").addEventListener("click",function(){reveal()});
+$("bReveal").addEventListener("click",function(){
+  if(S.phase==="trap"){retry();return}
+  reveal();
+});
 $("bNext").addEventListener("click",function(){
   if(S.phase==="ready"){begin();return}
   if(S.phase==="quiz")skip();else next()});

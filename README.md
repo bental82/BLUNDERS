@@ -19,7 +19,9 @@ course, where the arrows the author drew and the clock you're under *are* the le
 - Never hands you the move: a wrong answer or a timeout says so and stops. You have to
   ask to be shown.
 - Plays out the traps. Answer with a move the author tagged `??` and the refutation
-  plays on the board with his commentary, explorable afterwards as move chips.
+  plays on the board with his commentary. Click any move chip to take over and step it
+  yourself, and **Try again** puts you back on the position without showing the answer —
+  seeing why your move loses isn't the same as being told the right one.
 - Syncs across your devices, with no login.
 
 ## Running it
@@ -52,7 +54,7 @@ is yours alone now). Turn on Vercel Deployment Protection and keep the repo priv
 | answer correctly | the author's arrows and commentary land as the explanation |
 | answer wrong | *That is not it.* — position back, move withheld, recorded as missed |
 | run out of time | *Out of time.* — same, but **not recorded**; the clock is this app's, not the course's |
-| play a move tagged `??` | the refutation plays out, then **Show the right move** |
+| play a move tagged `??` | the refutation plays out — step it with the move chips, then **Show the right move** or **Try again** |
 | press **Show me** / <kbd>R</kbd> | the move, arrows, commentary, side lines |
 
 The clock is only held where there's something to read, and only once per move — a retry

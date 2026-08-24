@@ -203,6 +203,75 @@ await settle(["quiz"], 9000);
   ok("no clock running", !s.ticking, s);
 }
 
+console.log("\n10. a trap replay can be stepped, and offers another go");
+// item 292 ply 0: Nxb5?? is tagged, with a 28-move refutation to walk
+await go(292, 30);
+await settle(["ready", "quiz"]);
+if ((await st()).phase === "ready") await page.keyboard.press("Enter");
+await settle(["quiz"]);
+{
+  const bl = await page.evaluate(() => {
+    const p = window.__CT.item().plies[window.__CT.S.ply];
+    const a = (p.alts || []).find((x) => x.bad && (x.line || []).length >= 3);
+    return a ? { uci: a.u ? a.u : null, san: a.s, len: a.line.length } : null;
+  });
+  ok("the position really has a tagged blunder", bl && bl.len >= 3, bl);
+  await page.evaluate((san) => {
+    const p = window.__CT.item().plies[window.__CT.S.ply];
+    window.__CT.pick((p.alts.find((x) => x.s === san)).u);
+  }, bl.san);
+  await settle(["trap"], 9000);
+  ok("playing it starts the refutation", (await st()).phase === "trap", await st());
+
+  const chips = await page.evaluate(() =>
+    document.querySelectorAll('.linebar[data-ns="trap"] .lm').length);
+  ok("the refutation is listed as chips", chips >= 3, chips);
+
+  // step to the first move by hand; that must move the board and stop the replay
+  await page.evaluate(() => {
+    document.querySelectorAll('.linebar[data-ns="trap"] .lm')[0].click();
+  });
+  await page.waitForTimeout(400);
+  const s1 = await page.evaluate(() => ({
+    trapK: window.__CT.S.trapK, auto: window.__CT.S.trapAuto,
+    board: window.__CT.board.at.join(","),
+    on: [...document.querySelectorAll('.linebar[data-ns="trap"] .lm')]
+          .findIndex((b) => b.classList.contains("on")) }));
+  ok("clicking a chip takes control of the replay", s1.auto === false, s1);
+  ok("and moves to that step", s1.trapK === 0 && s1.on === 0, s1);
+
+  // step forward to a later move
+  await page.evaluate(() => {
+    const b = document.querySelectorAll('.linebar[data-ns="trap"] .lm');
+    b[Math.min(2, b.length - 1)].click();
+  });
+  await page.waitForTimeout(500);
+  const s2 = await page.evaluate(() => ({
+    trapK: window.__CT.S.trapK, board: window.__CT.board.at.join(",") }));
+  ok("stepping forward changes the position", s2.board !== s1.board, { s1: s1.board.slice(0,40), s2: s2.board.slice(0,40) });
+  ok("and the step is recorded", s2.trapK > 0, s2);
+
+  // the board must stay put now the replay is stopped
+  await page.waitForTimeout(2600);
+  const s3 = await page.evaluate(() => window.__CT.board.at.join(","));
+  ok("the replay does not carry on underneath", s3 === s2.board, null);
+
+  // and there is a way back without being shown the answer
+  const btn = await page.evaluate(() => {
+    const b = document.getElementById("bReveal");
+    return { shown: b.offsetParent !== null, text: b.innerText.trim() };
+  });
+  ok("a second action is offered", btn.shown, btn);
+  ok("and it is another go, not the answer", /try again/i.test(btn.text), btn);
+  await page.click("#bReveal");
+  await settle(["quiz"]);
+  const back = await st();
+  const ans = await answer();
+  ok("it puts you back on the position", back.phase === "quiz", back.phase);
+  ok("with the answer still hidden", !back.panel.includes(ans.san),
+     { san: ans.san, panel: back.panel.slice(0, 90) });
+}
+
 console.log("\njs errors   " + errs.length);
 errs.slice(0, 8).forEach((e) => console.log("   " + e));
 await browser.close();
