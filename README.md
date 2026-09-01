@@ -90,6 +90,14 @@ Getting it right ninety seconds after being shown proves recall of the last nine
 seconds, and the six hours rule out a miss at 23:58 cleared at 00:03. Hints clear the
 same way.
 
+The rule is **per move, and a position's dot is the worst of its moves** — a puzzle with
+four quiz moves goes green only when all four are clean, so getting the first one right
+does not clear it. Because that is invisible from a dot alone, the app says it out loud:
+a red row in the rail carries the count of moves still owed, answering one right too soon
+after a miss says so instead of a bare *Correct*, and the end of a position that is still
+red names which moves are holding it and when they come back into play, rather than
+announcing *Position complete* over a red dot.
+
 That's why progress is stored as *attempts* rather than verdicts:
 
 ```
@@ -209,13 +217,14 @@ the state machine and board for debugging.
 
 ## Verification
 
-Four suites, all needing `npm i playwright` and a server on :8000.
+Six suites, all needing `npm i playwright` and a server on :8000.
 
 | | covers |
 |---|---|
 | `verify.mjs` | walks all 328 positions and plays all 835 answers, checking board vs FEN, side to move, orientation, legality, every lesson and side line |
 | `verify-flow.mjs` | the clock gate, and that a miss withholds the move until asked |
 | `verify-redeem.mjs` | the day-and-six-hours rule, the midnight loophole, one-ask-one-attempt, merge convergence, migration |
+| `verify-owed.mjs` | which moves hold a position red, the rail's count, and that neither a right-but-too-soon answer nor the end of a red position claims to be green |
 | `verify-theme.mjs` | the default is unchanged, every set draws differently and takes ink, and nothing bleeds over the board's edges |
 | `verify-sync.mjs` | two browsers against a mock Supabase: both merge directions, reset, dead endpoint, `file://` build. Needs no network |
 
@@ -224,6 +233,7 @@ node build/verify.mjs http://localhost:8000/
 node build/verify.mjs file://$PWD/dist/clamp-trainer.html
 node build/verify-flow.mjs http://localhost:8000/
 node build/verify-redeem.mjs http://localhost:8000/
+node build/verify-owed.mjs http://localhost:8000/
 node build/verify-theme.mjs http://localhost:8000/ /tmp/shots   # dir optional: writes PNGs
 node build/verify-sync.mjs
 ```

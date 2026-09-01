@@ -75,6 +75,9 @@ code{font-family:var(--fm);font-size:.88em;background:#ffffff0f;border:1px solid
 .row.s-partial .dot{background:linear-gradient(90deg,var(--green) 0 50%,#ffffff1f 50% 100%);box-shadow:none}
 .row.lesson{font-style:italic}
 .row .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row .owed{flex:none;font-family:var(--fm);font-size:9.5px;line-height:1;
+  padding:3px 5px;border-radius:5px;background:#e5484d1f;color:var(--red)}
+.row.s-hint .owed{background:#e3b3411f;color:var(--amber)}
 
 /* ---------- main ---------- */
 main{flex:1;display:flex;flex-direction:column;min-width:0;overflow:hidden}
@@ -871,6 +874,51 @@ function statusOf(it){
   if(seen<total)return worst==="clean"?"partial":worst;
   return worst;
 }
+/* The dot is the worst of a position's quiz moves, so when it stays red this
+   is what is holding it: the moves still owed a clean answer, and whether
+   each is far enough past its last miss to be earned back today. */
+function outstanding(it){
+  var out=[],ord=0,i,r,pd;
+  if(it.kind!=="pos")return out;
+  for(i=0;i<it.plies.length;i++){
+    if(!it.plies[i].q)continue;
+    ord++;
+    r=resOf(it.id+":"+i);
+    if(r!=="missed"&&r!=="hint")continue;
+    pd=pending(it.id+":"+i);
+    out.push({ply:i,ord:ord,ready:!!(pd&&pd.ready),
+              at:pd?readyAt(pd.since):0});
+  }
+  return out;
+}
+/* The first instant a clean answer would satisfy both halves of redeems():
+   six hours past the miss, and past midnight of the day it happened. */
+function readyAt(tBad){
+  var mid=new Date(tBad);mid.setHours(24,0,0,0);
+  return Math.max(tBad+REDEEM_MS,mid.getTime());
+}
+function readyPhrase(ms){
+  var now=Date.now(),d=new Date(ms);
+  if(ms<=now)return "now";
+  var hm=("0"+d.getHours()).slice(-2)+":"+("0"+d.getMinutes()).slice(-2);
+  var at=(hm==="00:00")?"":" at "+hm;      /* midnight needs no clock time */
+  var tm=new Date(now);tm.setHours(24,0,0,0);
+  if(dayOf(ms)===dayOf(now))return "later today"+at;
+  if(dayOf(ms)===dayOf(tm.getTime()))return "tomorrow"+at;
+  return ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday",
+          "Saturday"][d.getDay()]+at;
+}
+function quizCount(it){
+  var n=0;for(var i=0;i<it.plies.length;i++)if(it.plies[i].q)n++;return n;
+}
+/* "move 3" / "moves 3 and 4" / "moves 1, 3 and 4" */
+function movesPhrase(list){
+  var n=list.map(function(o){return o.ord});
+  if(!n.length)return"";
+  if(n.length===1)return "move "+n[0];
+  return "moves "+n.slice(0,-1).join(", ")+" and "+n[n.length-1];
+}
+function cap(t){return t?t.charAt(0).toUpperCase()+t.slice(1):t}
 var toastT=null;
 function toast(msg){
   var el=$("toast");if(!el)return;
@@ -930,10 +978,11 @@ function renderRail(){
          '<span class="cbar"><i class="ok" style="width:'+(s.ok/s.n*100)+'%"></i>'+
          '<i class="no" style="width:'+(s.no/s.n*100)+'%"></i></span></div>';
     }
-    var st2=statusOf(it);
+    var st2=statusOf(it),lf2=owedOn(it,st2);
     h+='<div class="row'+(it.kind!=="pos"?" lesson":"")+(st2?" s-"+st2:"")+
        '" data-i="'+i+'"><span class="dot"></span><span class="nm">'+
-       esc(it.title)+"</span></div>";
+       esc(it.title)+"</span>"+
+       (lf2?'<span class="owed" title="moves still to clear">'+lf2+"</span>":"")+"</div>";
   });
   list.innerHTML=h;
   var rows=list.querySelectorAll(".row");
@@ -948,12 +997,25 @@ function renderRail(){
   });
   syncRail();
 }
+/* How many of a position's moves are still owed a clean answer. Only worth
+   showing when a position has several -- on a one-move item the dot says it. */
+function owedOn(it,st){
+  if(st===undefined)st=statusOf(it);
+  if((st!=="missed"&&st!=="hint")||quizCount(it)<2)return 0;
+  return outstanding(it).length;
+}
 function syncRail(){
   var list=$("railList"),rows=list.querySelectorAll(".row");
   for(var j=0;j<rows.length;j++){
     var i=+rows[j].dataset.i,it=DATA[i],st=statusOf(it);
     rows[j].className="row"+(it.kind!=="pos"?" lesson":"")+(st?" s-"+st:"")+
       (i===S.order[S.k]?" cur":"");
+    var b=rows[j].querySelector(".owed"),n=owedOn(it,st);
+    if(n){
+      if(!b){b=document.createElement("span");b.className="owed";
+             b.title="moves still to clear";rows[j].appendChild(b)}
+      if(b.textContent!==String(n))b.textContent=n;
+    } else if(b)rows[j].removeChild(b);
   }
   var c=list.querySelector(".row.cur");
   if(c)c.scrollIntoView({block:"nearest"});
@@ -1199,6 +1261,7 @@ function renderPanel(){
   } else if(S.phase==="solved"){
     h+='<div class="verdict v-ok"><span class="mk">'+ICO.ok+"</span>Correct</div>";
     h+='<div style="margin-bottom:12px"><span class="movetag ok">'+esc(p.s)+"</span></div>";
+    h+=redeemNote(true);      /* right, but not always enough to clear the red */
     if(ctx)h+='<div class="prose" style="opacity:.6">'+ctx+"</div>";
     if(p.t)h+='<div class="prose">'+prose(p.t)+"</div>";
     h+=altsBlock(p);
@@ -1228,9 +1291,24 @@ function renderPanel(){
     h+=redeemNote();
     h+=altsBlock(p);
   } else if(S.phase==="done"){
-    var qs=0;for(var z=0;z<it.plies.length;z++)if(it.plies[z].q)qs++;
-    h+='<div class="verdict v-ok"><span class="mk">'+ICO.ok+"</span>Position complete</div>";
-    if(qs>1)h+='<div class="prose">All '+qs+" moves found.</div>";
+    var qs=quizCount(it),left=outstanding(it),y;
+    if(!left.length){
+      h+='<div class="verdict v-ok"><span class="mk">'+ICO.ok+"</span>Position complete</div>";
+      if(qs>1)h+='<div class="prose">All '+qs+" moves found.</div>";
+    } else {
+      /* Saying "position complete" over a red dot is what makes the dot look
+         broken. Name what is still owed instead. */
+      var many=left.length>1,soon=left[0].at;
+      for(y=1;y<left.length;y++)if(left[y].at<soon)soon=left[y].at;
+      h+='<div class="verdict v-nu"><span class="mk">'+ICO.nu+"</span>Still marked missed</div>";
+      h+='<div class="prose">'+(qs>1
+        ? cap(movesPhrase(left))+(many?" are":" is")+
+          " still red — the dot goes green only once every move here is clean."
+        : "This move is still red.")+"</div>";
+      h+='<div class="hintline">'+(many?"They come":"It comes")+" back into play "+
+         readyPhrase(soon)+" — answer "+(many?"them":"it")+" right then and the "+
+         "red clears.</div>";
+    }
     var lastp=it.plies[it.plies.length-1];
     if(!lastp.q&&lastp.t)h+='<div class="prose">'+prose(lastp.t)+"</div>";
   }
@@ -1238,14 +1316,16 @@ function renderPanel(){
   wirePanel();buttons();
 }
 /* What it takes to get this move back to green, in words. */
-function redeemNote(){
+function redeemNote(justRight){
   var pd=pending(item().id+":"+S.ply);
   if(!pd)return"";
-  return '<div class="hintline">'+(pd.ready
-    ? "Answer this clean now and it goes back to green."
-    : "Answer it clean on a later day and it goes back to green \u2014 getting it "+
-      "right again straight after being shown proves recall of the last minute, "+
-      "not of the pattern.")+"</div>";
+  if(pd.ready&&!justRight)
+    return '<div class="hintline">Answer this clean now and it goes back to green.</div>';
+  return '<div class="hintline">'+
+    (justRight?"Right \u2014 but you were shown this one moments ago, so it stays red. ":"")+
+    "Answer it clean "+readyPhrase(readyAt(pd.since))+" and it goes back to green "+
+    "\u2014 getting it right again straight after being shown proves recall of "+
+    "the last minute, not of the pattern.</div>";
 }
 function defaultAsk(it,p){
   var m=/(\d+)\s+Moves in a Row/i.exec(it.title);
@@ -1560,7 +1640,7 @@ booting=false;
 syncMark(syncOn?"busy":"off");
 if(syncOn){cloudSync();cloudBeat()}
 window.__CT={S:S,board:board,sync:cloudSync,absorb:absorb,begin:begin,
-  resOf:resOf,pending:pending,statusOf:statusOf,
+  resOf:resOf,pending:pending,statusOf:statusOf,outstanding:outstanding,owedOn:owedOn,
   reveal:reveal,retry:retry,hint:hint,state:function(){return {P:P,C:C,G:G,T:T}},next:next,jumpTo:jumpTo,pick:onPick,item:item,fit:fit};
 }
 
