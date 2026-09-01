@@ -496,15 +496,40 @@ function statusOf(it){
   if(seen<total)return worst==="clean"?"partial":worst;
   return worst;
 }
+var toastT=null;
+function toast(msg){
+  var el=$("toast");if(!el)return;
+  el.textContent=msg;el.classList.add("on");
+  clearTimeout(toastT);toastT=setTimeout(function(){el.classList.remove("on")},2800);
+}
+/* How many items each filter would give you, for the labels. */
+function modeCounts(){
+  var c={all:DATA.length,todo:0,missed:0},i,st;
+  for(i=0;i<DATA.length;i++){
+    st=statusOf(DATA[i]);
+    if(st===""||st==="partial")c.todo++;
+    else if(st==="missed")c.missed++;
+  }
+  return c;
+}
+/* Course order, always: the queue runs first item to last, not from wherever
+   you happen to be standing. "missed" is the red dots only -- amber is a move
+   you took the hint on, which is a different thing from getting it wrong. */
 function buildOrder(){
   S.order=[];
   for(var i=0;i<DATA.length;i++){
     var st=statusOf(DATA[i]);
     if(C.mode==="all")S.order.push(i);
     else if(C.mode==="todo"){if(st===""||st==="partial")S.order.push(i)}
-    else if(C.mode==="missed"){if(st==="missed"||st==="hint")S.order.push(i)}
+    else if(C.mode==="missed"){if(st==="missed")S.order.push(i)}
   }
-  if(!S.order.length){C.mode="all";for(var j=0;j<DATA.length;j++)S.order.push(j)}
+  if(!S.order.length){
+    /* An empty queue would leave item() undefined. Fall back to everything but
+       say so -- silently rewriting C.mode pushed that change to every device. */
+    for(var j=0;j<DATA.length;j++)S.order.push(j);
+    if(C.mode!=="all"&&!booting)
+      toast("Nothing "+(C.mode==="missed"?"missed":"new")+" left \u2014 showing everything");
+  }
 }
 
 /* ============================== rail ============================== */
@@ -515,7 +540,15 @@ function renderRail(){
     var s=chapStats[it.chap]||(chapStats[it.chap]={ok:0,no:0,n:0});
     s.n++;if(st==="clean"||st==="read")s.ok++;else if(st==="missed"||st==="hint")s.no++;
   });
+  var inOrder={},q;
+  for(q=0;q<S.order.length;q++)inOrder[S.order[q]]=1;
+  var filtered=(C.mode!=="all"&&S.order.length<DATA.length);
+  if(filtered)
+    h+='<div class="railfilter">'+S.order.length+" "+
+       (C.mode==="missed"?"missed":"not started")+
+       ' <button data-mode="all">show all</button></div>';
   DATA.forEach(function(it,i){
+    if(filtered&&!inOrder[i])return;
     if(it.chap!==cur){
       cur=it.chap;var s=chapStats[cur];
       h+='<div class="chap"><span>'+esc(cur.replace(/^\d+\.\s*/,""))+'</span>'+
@@ -531,6 +564,13 @@ function renderRail(){
   var rows=list.querySelectorAll(".row");
   for(var j=0;j<rows.length;j++)rows[j].addEventListener("click",function(){
     jumpTo(+this.dataset.i)});
+  var fb=list.querySelector(".railfilter button");
+  if(fb)fb.addEventListener("click",function(){
+    var was=S.order[S.k];              /* un-filtering keeps you where you are */
+    C.mode="all";save();buildOrder();
+    var k=S.order.indexOf(was);S.k=k<0?0:k;
+    renderRail();syncRail();
+  });
   syncRail();
 }
 function syncRail(){
@@ -964,15 +1004,18 @@ function swatch(name,opts,val){
 }
 function seg(name,opts,val){
   return '<div class="seg" data-seg="'+name+'">'+opts.map(function(o){
-    return '<button data-v="'+o[0]+'"'+(String(o[0])===String(val)?' class="on"':"")+">"+o[1]+"</button>"
+    return '<button data-v="'+o[0]+'"'+(o[2]?" disabled":"")+
+           (String(o[0])===String(val)?' class="on"':"")+">"+o[1]+"</button>"
   }).join("")+"</div>";
 }
 function prefRows(){
+  var mc=modeCounts();
   return '<div class="opt"><div class="lab"><b>Clock</b><span>Off by default \u2014 the course asks for 10\u201315 minutes a puzzle. Later moves in a line get 75%. Running out is not counted against you.</span></div>'+
     seg("secs",[[0,"off"],[30,"30s"],[120,"2m"],[300,"5m"],[600,"10m"],
                 [900,"15m"]],C.secs)+"</div>"+
-    '<div class="opt"><div class="lab"><b>Work through</b><span>all &middot; only untouched &middot; only missed</span></div>'+
-    seg("mode",[["all","all"],["todo","new"],["missed","missed"]],C.mode)+"</div>"+
+    '<div class="opt"><div class="lab"><b>Work through</b><span>Everything, only what you have not started, or only the red ones \u2014 in course order.</span></div>'+
+    seg("mode",[["all","all "+mc.all],["todo","new "+mc.todo,!mc.todo],
+                ["missed","missed "+mc.missed,!mc.missed]],C.mode)+"</div>"+
     '<div class="opt"><div class="lab"><b>Auto-advance</b><span>After a correct answer.</span></div>'+
     seg("auto",[[0,"off"],[2,"2s"],[4,"4s"]],C.auto)+"</div>"+
     '<div class="opt"><div class="lab"><b>Coordinates</b><span>File and rank labels.</span></div>'+
@@ -992,7 +1035,7 @@ function prefRows(){
 }
 function overlayStart(){
   veilNow="start";
-  var t=renderTally(),done=t.ok+t.no;
+  var t=renderTally(),done=t.ok+t.no,mcS=modeCounts();
   var res=DATA[P.cursor]||DATA[0];
   var h='<h2>Preventing Blunders in Chess</h2><div class="sub">CM Can Kabadayı &middot; '+
         DATA.length+" items &middot; "+t.tot+" quiz moves</div>"+
@@ -1005,10 +1048,14 @@ function overlayStart(){
         '<div class="cardfoot"><button class="btn pri" data-act="go">'+
         (done?"Continue — "+esc(res.title):"Start the course")+"</button>"+
         (done?'<button class="btn" data-act="restart">From the top</button>':"")+
+        (mcS.missed?'<button class="btn" data-act="review">Review '+mcS.missed+
+                    " missed</button>":"")+
         '<span class="spacer"></span><button class="btn gh" data-act="wipe">Reset progress</button></div>';
   openVeil(h,function(act){
     if(act==="go"){buildOrder();var k=S.order.indexOf(P.cursor);S.k=k<0?0:k;closeVeil();loadItem()}
-    if(act==="restart"){buildOrder();S.k=0;closeVeil();loadItem()}
+    if(act==="restart"){C.mode="all";save();buildOrder();S.k=0;closeVeil();loadItem()}
+    if(act==="review"){C.mode="missed";save();buildOrder();S.k=0;renderRail();
+      closeVeil();loadItem()}
     if(act==="wipe"){if(confirm("Erase all progress \u2014 on every device?")){resetAll();
       renderRail();overlayStart()}}
   });
@@ -1036,7 +1083,8 @@ function overlayEnd(){
     '<div class="cardfoot"><button class="btn pri" data-act="missed">Run the missed ones</button>'+
     '<button class="btn" data-act="close">Stay here</button></div>',
     function(act){
-      if(act==="missed"){C.mode="missed";save();buildOrder();S.k=0;closeVeil();loadItem()}
+      if(act==="missed"){C.mode="missed";save();buildOrder();S.k=0;renderRail();
+        closeVeil();loadItem()}
       if(act==="close")closeVeil();
     });
 }
@@ -1048,6 +1096,8 @@ function openVeil(html,onAct){
     b.addEventListener("click",function(){
       var name=this.parentNode.dataset.seg,v2=this.dataset.v;
       C[name]=TEXTPREF[name]?v2:+v2;save();
+      /* A new queue starts at its beginning, not wherever you were standing. */
+      if(name==="mode"){buildOrder();S.k=0;renderRail()}
       var sib=this.parentNode.children;
       for(var i=0;i<sib.length;i++)sib[i].className=(sib[i]===this)?"on":"";
       applyPrefs();

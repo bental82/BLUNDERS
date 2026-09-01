@@ -68,12 +68,21 @@ Kept per quiz move as `clean` / `hint` / `missed`, plus which lessons you've rea
 cursor and your settings. Counted per **quiz move**, not per exercise — 835 is the
 denominator, and a hint counts as missed.
 
+**Running the red ones.** *Review N missed* on the start card, or Settings → *Work through*,
+which carries a live count on each option and greys out one that would be empty. The queue
+is the red dots only — amber is a move you took the hint on, which is a different thing
+from getting it wrong — and it runs in course order, first item to last, starting at the
+first. While it's on, the side panel lists just that queue with a *show all* way back.
+
 The start card shows four numbers, of which two are easily confused:
 
 | | |
 |---|---|
 | **accuracy** | clean ÷ attempted — how often you were right |
 | **covered** | attempted ÷ 835 — how much of the course you've seen |
+
+An empty filter no longer rewrites the setting behind your back: it falls back to
+everything and says so, because `C` syncs and a silent rewrite reached every device.
 
 **Turning a red exercise green.** A move stays red until you answer it clean on a **later
 local day**, at least **six hours** after the miss; miss it again and it's red again.

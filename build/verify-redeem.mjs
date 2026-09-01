@@ -242,6 +242,84 @@ console.log("\n7. the headline numbers add up");
   await page3.close();
 }
 
+console.log("\n8. the red-dot queue");
+{
+  const page4 = await browser.newPage({ viewport: { width: 1500, height: 940 } });
+  page4.on("pageerror", (e) => errs.push("pageerror: " + e.message));
+  await page4.addInitScript(() => {
+    window.SYNC = {};
+    const t = Date.now() - 6e5, att = {};
+    for (let id = 10; id < 16; id++) att[id + ":0"] = [[2, t]];   // 6 red
+    for (let id = 16; id < 20; id++) att[id + ":0"] = [[1, t]];   // 4 amber
+    localStorage.setItem("pbc.trainer.v1", JSON.stringify({
+      P: { att, read: {}, cursor: 0 },
+      C: { secs: 0, auto: 0, coords: 1, mode: "all" }, G: 0, T: 1000 }));
+  });
+  await page4.goto(url);
+  await page4.waitForFunction(() => !!window.__CT, null, { timeout: 20000 });
+  await page4.waitForTimeout(250);
+
+  const card = await page4.evaluate(() => ({
+    bt: [...document.querySelectorAll("#veilCard .cardfoot .btn")].map((b) => b.innerText.trim()),
+    modes: [...document.querySelectorAll('[data-seg="mode"] button')]
+      .map((b) => ({ v: b.dataset.v, label: b.innerText.trim(), off: b.disabled })) }));
+  ok("the start card offers the review in one tap",
+     card.bt.some((t) => /Review 6 missed/.test(t)), card.bt);
+  ok("missed counts the red only, not the amber",
+     card.modes.find((m) => m.v === "missed").label === "missed 6", card.modes);
+
+  await page4.click('[data-act="review"]');
+  await page4.waitForTimeout(350);
+  const q = await page4.evaluate(() => {
+    const T = window.__CT, D = window.DATA;
+    return { len: T.S.order.length,
+             statuses: [...new Set(T.S.order.map((i) => T.statusOf(D[i])))],
+             sorted: T.S.order.slice().sort((a, c) => a - c).join() === T.S.order.join(),
+             startsAtFirst: T.S.k === 0,
+             railRows: document.querySelectorAll("#railList .row").length,
+             banner: (document.querySelector(".railfilter") || {}).innerText || null };
+  });
+  ok("the queue is red exercises only",
+     q.statuses.length === 1 && q.statuses[0] === "missed", q.statuses);
+  ok("all of them", q.len === 6, q.len);
+  ok("in course order, first to last", q.sorted, q);
+  ok("starting at the first", q.startsAtFirst, q);
+  ok("and the rail shows that queue, not the whole course", q.railRows === 6, q);
+  ok("saying what it is filtered to", /6 missed/i.test(q.banner || ""), q.banner);
+
+  const was = await page4.evaluate(() => window.__CT.S.order[window.__CT.S.k]);
+  await page4.evaluate(() => document.querySelector(".railfilter button").click());
+  await page4.waitForTimeout(250);
+  const back = await page4.evaluate(() => ({
+    mode: window.__CT.state().C.mode,
+    rows: document.querySelectorAll("#railList .row").length,
+    banner: !!document.querySelector(".railfilter"),
+    at: window.__CT.S.order[window.__CT.S.k] }));
+  ok("show all restores the rail and the setting",
+     back.rows > 300 && !back.banner && back.mode === "all", back);
+  ok("keeping you on the same exercise", back.at === was, { was, now: back.at });
+
+  // clearing the reds must not quietly rewrite a setting that syncs everywhere
+  await page4.evaluate(() => {
+    const P = window.__CT.state().P, t = Date.now() - 6e5;
+    for (const k in P.att) P.att[k] = [[0, t]];
+  });
+  await page4.click("#btnCfg");
+  await page4.waitForTimeout(200);
+  const dis = await page4.evaluate(() => {
+    const b = document.querySelector('[data-seg="mode"] [data-v="missed"]');
+    return { label: b.innerText.trim(), off: b.disabled };
+  });
+  ok("with nothing red the button reads zero and cannot be picked",
+     dis.off === true && /missed 0/.test(dis.label), dis);
+  await page4.click('[data-act="close"]');
+  await page4.waitForTimeout(200);
+  ok("and the stored mode is untouched",
+     (await page4.evaluate(() => window.__CT.state().C.mode)) === "all",
+     await page4.evaluate(() => window.__CT.state().C.mode));
+  await page4.close();
+}
+
 console.log("\njs errors   " + errs.length);
 errs.slice(0, 8).forEach((e) => console.log("   " + e));
 await browser.close();

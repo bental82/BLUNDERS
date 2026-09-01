@@ -37,6 +37,13 @@ code{font-family:var(--fm);font-size:.88em;background:#ffffff0f;border:1px solid
 .brandsub{font-family:var(--fm);font-size:10px;text-transform:uppercase;letter-spacing:.13em;
   color:var(--tx3);margin-top:5px}
 .railscroll{flex:1;overflow-y:auto;overscroll-behavior:contain;padding-bottom:24px}
+.railfilter{display:flex;align-items:center;gap:8px;margin:10px 12px 4px;padding:7px 10px;
+  border-radius:8px;background:var(--surface2);border:1px solid var(--line);
+  font-family:var(--fm);font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--amber)}
+.railfilter button{margin-left:auto;font-family:var(--fm);font-size:10.5px;color:var(--tx2);
+  text-transform:none;letter-spacing:0}
+.railfilter button:hover{color:var(--tx)}
 .chap{padding:15px 16px 5px;font-family:var(--fm);font-size:10px;letter-spacing:.13em;
   text-transform:uppercase;color:var(--tx3);display:flex;align-items:center;gap:8px}
 .chap .cbar{flex:1;height:3px;border-radius:2px;background:var(--surface3);overflow:hidden;display:flex}
@@ -216,6 +223,8 @@ main{flex:1;display:flex;flex-direction:column;min-width:0;overflow:hidden}
 .seg{display:flex;flex-wrap:wrap;background:var(--surface2);border:1px solid var(--line);border-radius:8px;padding:2px;gap:2px}
 .seg button{padding:4px 10px;border-radius:6px;font-family:var(--fm);font-size:11.5px;color:var(--tx2)}
 .seg button.on{background:var(--amber);color:#1b1405;font-weight:600}
+.seg button:disabled{opacity:.3;cursor:default}
+.seg button:disabled.on{opacity:.55}
 .seg.sw button{padding:3px}
 .seg.sw button i{display:block;width:26px;height:20px;border-radius:4px;
   box-shadow:inset 0 0 0 1px #00000038}
