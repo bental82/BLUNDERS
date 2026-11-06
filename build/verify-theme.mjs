@@ -8,6 +8,11 @@
  * that picking a theme repaints squares, coordinates and the pieces already on
  * the board, and that the choice survives a reload. With a directory argument
  * it also writes one PNG of the board per theme.
+ *
+ * And the layout around the board: from a landscape phone to a desktop, the
+ * board, its timer and its buttons sit inside the stage, only the text
+ * scrolls, and reading to the end of the wordiest comment leaves the board
+ * wholly on screen.
  */
 import fs from "node:fs";
 import pw from "playwright";
@@ -32,6 +37,31 @@ await page.click('[data-act="go"]');
 await page.waitForTimeout(300);
 // land on an actual position with pieces, clock off so nothing times out mid-shot
 await settleOnBoard(page);
+
+// Injected into the page: scroll the commentary to its end and report what is
+// on screen. The stage is asked to scroll too, and must not -- only the text does.
+function addReadToEnd() {
+  window.readToEnd = () => {
+    const stage = document.getElementById("stage"), pn = document.getElementById("panel");
+    const col = document.getElementById("boardcol");
+    const over = pn.scrollHeight > pn.clientHeight + 2;
+    pn.scrollTop = 1e6;
+    stage.scrollTop = 1e6;
+    const sr = stage.getBoundingClientRect(), pr = pn.getBoundingClientRect();
+    const br = document.getElementById("board").getBoundingClientRect();
+    const cr = col.getBoundingClientRect();
+    const last = pn.lastElementChild ? pn.lastElementChild.getBoundingClientRect() : null;
+    return {
+      over, stageScrolls: stage.scrollTop > 0,
+      stacked: stage.classList.contains("stacked"),
+      board: Math.round(br.width),
+      boardOn: br.top >= 0 && br.left >= 0 && br.bottom <= innerHeight && br.right <= innerWidth,
+      colIn: cr.top >= sr.top - 1 && cr.bottom <= sr.bottom + 1,
+      reachable: last ? last.bottom <= pr.bottom + 2 && last.bottom <= innerHeight + 2 : null,
+      docWide: document.documentElement.scrollWidth > innerWidth + 1,
+    };
+  };
+}
 
 const fails = [];
 const ok = (n, c, got) =>
@@ -190,6 +220,7 @@ console.log("\n6. nothing bleeds over the edges of the board");
   const pp = await phone.newPage();
   pp.on("pageerror", (e) => errs.push("pageerror: " + e.message));
   await pp.addInitScript(() => { window.SYNC = {}; });
+  await pp.addInitScript(addReadToEnd);
   await pp.goto(url);
   await pp.waitForFunction(() => !!window.__CT, null, { timeout: 20000 });
   await pp.evaluate(() => localStorage.clear());
@@ -255,20 +286,13 @@ console.log("\n6. nothing bleeds over the edges of the board");
   await pp.evaluate(() => window.__CT.reveal());
   await pp.waitForFunction(() => window.__CT.S.phase === "taught", null, { timeout: 20000 });
   await pp.waitForTimeout(350);
-  const scroll = await pp.evaluate(() => {
-    const stage = document.getElementById("stage");
-    const panel = document.querySelector(".panel");
-    const clipped = panel.scrollHeight > panel.clientHeight + 2;
-    stage.scrollTop = 99999;
-    const last = document.getElementById("panel").lastElementChild;
-    const r = last ? last.getBoundingClientRect() : null;
-    return { clipped, over: stage.scrollHeight > stage.clientHeight + 2,
-             reachable: r ? r.bottom <= innerHeight + 2 : null,
-             blocks: document.getElementById("panel").children.length };
-  });
+  // the text scrolls on its own; the board it explains stays where it is
+  const scroll = await pp.evaluate(() => readToEnd());
   ok("the wordiest position really does overflow", scroll.over, scroll);
-  ok("the panel does not clip its own text", scroll.clipped === false, scroll);
+  ok("the text scrolls, not the page around the board", !scroll.stageScrolls, scroll);
   ok("and the last block can be scrolled to", scroll.reachable === true, scroll);
+  ok("with the board still wholly on screen", scroll.boardOn === true, scroll);
+  ok("the stacked layout is the one in use", scroll.stacked === true, scroll);
   // the top bar must carry the score and the current exercise's status, and fit
   await pp.evaluate(() => { window.__CT.jumpTo(45); });
   await pp.waitForTimeout(250);
@@ -282,6 +306,48 @@ console.log("\n6. nothing bleeds over the edges of the board");
   ok("and the bar still fits", !bar.overflow && !bar.doc, bar);
 
   await phone.close();
+}
+
+console.log("\n7. at every size the board stays on screen while the text scrolls");
+// a landscape phone used to stack and scroll its board clean off the top, and
+// 1024 wide lost half of it under a long comment
+for (const [w, h, want] of [[844, 390, "side"], [667, 375, "side"], [320, 568, "stacked"],
+                            [375, 667, "stacked"], [820, 1180, "stacked"], [1024, 768, "side"],
+                            [1500, 940, "side"]]) {
+  const cx = await browser.newContext({ viewport: { width: w, height: h } });
+  const pg = await cx.newPage();
+  pg.on("pageerror", (e) => errs.push("pageerror: " + e.message));
+  await pg.addInitScript(() => { window.SYNC = {}; });
+  await pg.addInitScript(addReadToEnd);
+  await pg.goto(url);
+  await pg.waitForFunction(() => !!window.__CT, null, { timeout: 20000 });
+  await pg.click('[data-act="go"]');
+  await pg.evaluate(() => { window.__CT.state().C.secs = 0; window.__CT.jumpTo(45); });
+  await pg.waitForFunction(() => window.__CT.S.phase === "quiz", null, { timeout: 20000 });
+  await pg.evaluate(() => window.__CT.reveal());
+  await pg.waitForFunction(() => window.__CT.S.phase === "taught", null, { timeout: 20000 });
+  await pg.waitForTimeout(300);
+  const r = await pg.evaluate(() => readToEnd());
+  const tag = w + "x" + h + ": ";
+  ok(tag + (want === "side" ? "text beside the board" : "text under the board"),
+     r.stacked === (want === "stacked"), r);
+  ok(tag + "board, timer and buttons inside the stage", r.colIn, r);
+  ok(tag + "the end of the text can be reached", r.reachable === true, r);
+  ok(tag + "and the board is still wholly on screen there", r.boardOn === true, r);
+  ok(tag + "no sideways page scroll", !r.docWide, r);
+  // the buttons change with the phase; a longer row must not push past the stage
+  await pg.evaluate(() => { window.__CT.retry(); });
+  await pg.waitForFunction(() => window.__CT.S.phase === "quiz", null, { timeout: 20000 });
+  await pg.evaluate(() => {
+    const p = window.__CT.item().plies[window.__CT.S.ply];
+    window.__CT.pick(p.alts.find((a) => a.bad).u);
+  });
+  await pg.waitForFunction(() => window.__CT.S.phase === "trap", null, { timeout: 20000 });
+  await pg.waitForTimeout(250);
+  const t = await pg.evaluate(() => readToEnd());
+  ok(tag + "the trap's buttons fit too", t.colIn, t);
+  ok(tag + "and the board did not change size for them", t.board === r.board, { was: r.board, now: t.board });
+  await cx.close();
 }
 
 console.log("\njs errors   " + errs.length);

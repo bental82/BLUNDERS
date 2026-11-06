@@ -9,8 +9,16 @@ course, where the arrows the author drew and the clock you're under *are* the le
 
 **What it does that a PGN viewer doesn't**
 
-- Draws the author's 426 `[%cal]` arrows and 394 `[%csl]` circles — hidden while you're
-  being asked, shown the moment you answer, so they explain rather than give away.
+- Draws the author's 426 `[%cal]` arrows and 394 `[%csl]` circles with the text they
+  belong to. Marks on the opponent's move pose the question — *"How should Black defend
+  the a4-pawn?"* comes with a4 circled and the knight's arrow onto it — so they're on the
+  board while you're asked. Marks on your own move are the explanation and wait for an
+  answer. A question mark that would give the answer away (the arrow of the move itself,
+  or a circle on the square it lands on) waits with them; eight questions draw one.
+- Keeps the board on screen. Only the text scrolls, so reading to the end of a long
+  comment never pushes the position it explains out of view. The text goes beside the
+  board or under it, whichever leaves the bigger board — so a landscape phone gets the
+  board on the left and the commentary on the right.
 - Plays the opponent's last move to you, animated, before the clock starts. For a
   blunder-check course, *what just changed* is the question.
 - Can put you on a clock — **off by default**, because the course asks for 10–15 minutes a
@@ -222,10 +230,10 @@ Six suites, all needing `npm i playwright` and a server on :8000.
 | | covers |
 |---|---|
 | `verify.mjs` | walks all 328 positions and plays all 835 answers, checking board vs FEN, side to move, orientation, legality, every lesson and side line |
-| `verify-flow.mjs` | the clock gate, and that a miss withholds the move until asked |
+| `verify-flow.mjs` | the clock gate, that a miss withholds the move until asked, and that the author's marks are drawn with their text, minus any that give the answer away |
 | `verify-redeem.mjs` | the day-and-six-hours rule, the midnight loophole, one-ask-one-attempt, merge convergence, migration |
 | `verify-owed.mjs` | which moves hold a position red, the rail's count, and that neither a right-but-too-soon answer nor the end of a red position claims to be green |
-| `verify-theme.mjs` | the default is unchanged, every set draws differently and takes ink, and nothing bleeds over the board's edges |
+| `verify-theme.mjs` | the default is unchanged, every set draws differently and takes ink, nothing bleeds over the board's edges, and from a landscape phone to a desktop the board stays on screen while the text scrolls |
 | `verify-sync.mjs` | two browsers against a mock Supabase: both merge directions, reset, dead endpoint, `file://` build. Needs no network |
 
 ```sh

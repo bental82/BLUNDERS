@@ -450,8 +450,8 @@ function resetAll(){
 }
 
 var S={order:[],k:0,ply:0,phase:"idle",failed:false,hinted:false,parts:[],
-       pendAnn:null,explore:null,trapAlt:null,trapK:0,trapAuto:false,timer:null,
-       why:"",ready4:-1,marked:false};
+       qAnn:null,explore:null,trapAlt:null,trapK:0,trapAuto:false,timer:null,
+       why:"",ready4:-1,marked:false,pkey:""};
 var board=new Board($("board"));
 
 function item(){return DATA[S.order[S.k]]}
@@ -684,7 +684,7 @@ function timeUp(){
 /* ============================== flow ============================== */
 function loadItem(){
   stopTimer();board.locked=true;board.legal=null;board.annotate([],[]);
-  S.ply=0;S.parts=[];S.failed=false;S.hinted=false;S.explore=null;S.trapAlt=null;S.pendAnn=null;
+  S.ply=0;S.parts=[];S.failed=false;S.hinted=false;S.explore=null;S.trapAlt=null;S.qAnn=null;
   S.trapAuto=false;
   S.ready4=-1;
   var it=item();
@@ -699,7 +699,8 @@ function loadItem(){
   board.set(it.fen);
   $("timerFill").style.transform="scaleX(1)";$("timer").className="timer off";
   if(it.intro)S.parts.push(it.intro);
-  if(it.introcal||it.introcsl)S.pendAnn={cal:it.introcal||[],csl:it.introcsl||[]};
+  if(it.introcal||it.introcsl)S.qAnn={cal:it.introcal||[],csl:it.introcsl||[]};
+  showAsk();
   S.phase="intro";renderPanel();
   setTimeout(step,d(it.intro?520:140));
 }
@@ -725,13 +726,41 @@ function step(){
   }
   board.move(p.u);
   if(p.t)S.parts.push(p.t);
-  if(p.cal||p.csl)S.pendAnn={cal:p.cal||[],csl:p.csl||[]};
-  S.ply++;renderPanel();
+  if(p.cal||p.csl)S.qAnn={cal:p.cal||[],csl:p.csl||[]};
+  /* drawn as the move lands, with its text -- and, past the last quiz move,
+     unfiltered, which is how a closing comment gets its arrows at all */
+  S.ply++;showAsk();renderPanel();
   setTimeout(step,d(p.t?880:540));
+}
+/* The author's marks travel with the text they were written with. Those on an
+   opponent's move (or the intro) pose the question -- "How should Black defend
+   the a4-pawn?" with a4 ringed and the knight's arrow onto it -- so they are on
+   the board while you are asked. Those on your own move are the explanation,
+   and wait for an answer.
+   A question's marks are allowed to frame the problem, not to solve it: an
+   arrow that is the answer move, or a ring on the square it lands on, is held
+   back with the explanation. Eight of the course's questions draw one. */
+function askMarks(){
+  var a=S.qAnn,it=item(),q=null,i;
+  if(!a)return {cal:[],csl:[]};
+  for(i=S.ply;i<it.plies.length;i++)if(it.plies[i].q){q=it.plies[i];break}
+  if(!q)return {cal:a.cal||[],csl:a.csl||[]};
+  var mv=q.u.slice(0,4),to=q.u.slice(2,4);
+  return {cal:(a.cal||[]).filter(function(t){return t.slice(1,5)!==mv}),
+          csl:(a.csl||[]).filter(function(t){return t.slice(1,3)!==to})};
+}
+function showAsk(extraCsl){
+  var m=askMarks();board.annotate(m.cal,m.csl.concat(extraCsl||[]));
+}
+/* Answered or shown: the question's marks, held-back ones included, plus the
+   explanation's own. */
+function showAnswer(p){
+  var a=S.qAnn||{cal:[],csl:[]};
+  board.annotate((a.cal||[]).concat(p.cal||[]),(a.csl||[]).concat(p.csl||[]));
 }
 function ask(p){
   S.explore=null;S.trapAlt=null;
-  board.annotate([],[]);
+  showAsk();
   board.legal=p.legal.split(" ");board.turn=p.side;
   board.onPick=onPick;
   $("turnBadge").textContent=(p.side==="w"?"White":"Black")+" to move";
@@ -771,11 +800,9 @@ function good(p){
   mark(p,S.hinted?"hint":"clean");
   var quiet=!p.t&&!p.cal&&!p.csl&&!(p.alts&&p.alts.length);
   S.phase="solved";S.hinted=false;
-  var a=S.pendAnn||{cal:[],csl:[]};
-  board.annotate((a.cal||[]).concat(p.cal||[]),(a.csl||[]).concat(p.csl||[]));
-  S.pendAnn=null;
+  showAnswer(p);
   renderPanel();
-  if(quiet){S.parts=[];S.ply++;S.phase="idle";setTimeout(step,d(360));return}
+  if(quiet){S.parts=[];S.qAnn=null;S.ply++;S.phase="idle";setTimeout(step,d(360));return}
   if(C.auto)setTimeout(function(){if(S.phase==="solved")next()},C.auto*1000);
 }
 /* The only path to the answer, and you have to ask for it. */
@@ -792,7 +819,7 @@ function reveal(){
 function missedMove(p,why){
   S.phase="missed";S.failed=true;S.why=why;
   stopTimer();
-  board.set(p.f);board.annotate([],[]);
+  board.set(p.f);showAsk();          /* the question is still open */
   board.locked=true;board.legal=null;
   $("timerFill").style.transform="scaleX(1)";$("timer").className="timer off";
   renderPanel();
@@ -800,8 +827,7 @@ function missedMove(p,why){
 function teach(p,why){
   S.phase="taught";S.failed=true;S.why=why;
   board.set(p.f);board.move(p.u);
-  var a=S.pendAnn||{cal:[],csl:[]};
-  board.annotate((a.cal||[]).concat(p.cal||[]),(a.csl||[]).concat(p.csl||[]));
+  showAnswer(p);
   renderPanel();
 }
 function playTrap(p,alt){
@@ -845,7 +871,7 @@ function next(){
   if(S.phase==="missed"){retry();return}
   if(S.phase==="taught"){retry();return}
   if(S.phase==="trap"){teach(item().plies[S.ply],"You walked into it.");return}
-  if(S.phase==="solved"){S.parts=[];S.ply++;S.phase="idle";step();return}
+  if(S.phase==="solved"){S.parts=[];S.qAnn=null;S.ply++;S.phase="idle";step();return}
   if(S.k<S.order.length-1){S.k++;loadItem()}
   else overlayEnd();
 }
@@ -853,14 +879,14 @@ function prev(){if(S.k>0){S.k--;loadItem()}}
 function skip(){if(S.k<S.order.length-1){S.k++;loadItem()}else overlayEnd()}
 function retry(){
   var p=item().plies[S.ply];
-  board.set(p.f);board.annotate([],[]);
+  board.set(p.f);
   S.hinted=false;S.explore=null;ask(p);
 }
 function hint(){
   if(S.phase!=="quiz")return;
   var p=item().plies[S.ply];
   S.hinted=true;
-  board.annotate([],["Y"+p.u.slice(0,2)]);
+  showAsk(["Y"+p.u.slice(0,2)]);       /* on top of the question's own marks */
   mark(p,"hint");renderPanel();
 }
 
@@ -878,7 +904,7 @@ function renderPanel(){
       h+='<div class="hintline">Read this first \u2014 the clock starts when you do.</div>';
     if(S.phase==="quiz"){
       if(!ctx)h+='<div class="ask">'+prose(defaultAsk(it,p))+"</div>";
-      if(S.hinted)h+='<div class="hintline">The circled piece is the one that moves.</div>';
+      if(S.hinted)h+='<div class="hintline">The piece circled in yellow is the one that moves.</div>';
     }
   } else if(S.phase==="solved"){
     h+='<div class="verdict v-ok"><span class="mk">'+ICO.ok+"</span>Correct</div>";
@@ -934,8 +960,19 @@ function renderPanel(){
     var lastp=it.plies[it.plies.length-1];
     if(!lastp.q&&lastp.t)h+='<div class="prose">'+prose(lastp.t)+"</div>";
   }
-  $("panel").innerHTML=h;
-  wirePanel();buttons();
+  var pn=$("panel");pn.innerHTML=h;
+  /* A new phase opens at its verdict, not wherever the last one was scrolled
+     to; a re-render within a phase (a hint, a step along a line) keeps it. */
+  var key=S.k+"/"+S.phase;
+  if(key!==S.pkey){S.pkey=key;pn.scrollTop=0}
+  wirePanel();buttons();moreCue();
+}
+/* With the board pinned the text has its own scroller, and a paragraph that
+   ends on a line break at the fold looks like the end of the comment. Fade the
+   bottom edge while there is more below. */
+function moreCue(){
+  var el=$("panel");
+  el.classList.toggle("more",el.scrollHeight-el.scrollTop-el.clientHeight>6);
 }
 /* What it takes to get this move back to green, in words. */
 function redeemNote(justRight){
@@ -991,8 +1028,7 @@ function lineBar(a,active,ns){
 function backToAnswer(){
   var p=item().plies[S.ply];
   S.explore=null;board.set(p.f);board.move(p.u);
-  var an=S.pendAnn||{cal:[],csl:[]};
-  board.annotate((an.cal||[]).concat(p.cal||[]),(an.csl||[]).concat(p.csl||[]));
+  showAnswer(p);
   renderPanel();
 }
 function wirePanel(){
@@ -1045,9 +1081,11 @@ function buttons(){
   n.className="btn"+(q?"":" pri");
   n.innerHTML=(rd?"Start":
               ((ms||S.phase==="taught")?"Try again":
-              (S.phase==="trap"?"Show the right move":
+              (S.phase==="trap"?'<span class="lg">Show the right move</span>'+
+                                '<span class="sh">Show me</span>':
               (q?"Skip":"Next"))))+' <kbd>↵</kbd>';
   $("turnBadge").style.display=(q||rd||ms)?"":"none";
+  refitIfWrapped();
 }
 function renderTally(){
   var ok=0,no=0,tot=0;
@@ -1199,16 +1237,63 @@ function applyPrefs(){
 }
 
 /* ============================== sizing / keys ============================== */
+/* Two layouts: the text beside the board, or under it. Whichever gives the
+   bigger board wins, as long as the text keeps a usable column or strip.
+   Either way the board does not scroll -- only the text does -- so reading to
+   the end of a long comment cannot push the position it explains off screen.
+   Window width alone used to decide, and stacked meant the whole stage
+   scrolled: a phone lost half the board under a long comment, and a landscape
+   phone lost all of it. */
+var GAP_SIDE=26,GAP_STACK=18;   /* .stage's gap, in each layout */
+var TIGHT=360;                  /* below this a full row of buttons may not fit */
+var fitUnder=0;                 /* what fit() last measured under the board */
 function fit(){
   var stage=$("stage");
   if(stage.style.display==="none")return;
-  var wide=window.innerWidth>1080;
-  var availH=stage.clientHeight-92;
-  var availW=wide?Math.min(stage.clientWidth-540,720):Math.min(stage.clientWidth-4,560);
-  var s=Math.floor(Math.max(160,Math.min(availH,availW))/8);
-  document.documentElement.style.setProperty("--sq",s+"px");
+  var cs=getComputedStyle(stage),root=document.documentElement.style;
+  var W=stage.clientWidth-parseFloat(cs.paddingLeft)-parseFloat(cs.paddingRight);
+  var H=stage.clientHeight-parseFloat(cs.paddingTop)-parseFloat(cs.paddingBottom);
+  var col=$("boardcol"),wrap=col.firstElementChild;
+  var textW=Math.max(300,Math.min(466,W*.42));       /* a readable column */
+  var textH=Math.max(150,H*.28);                      /* six lines or so, at least */
+  /* The timer, the buttons and the gaps under a board of side s*8. The buttons
+     wrap onto more rows as the board narrows, so this grows as s shrinks, and
+     only the layout can say by how much. */
+  function under(s){
+    col.classList.toggle("tight",s*8<TIGHT);
+    root.setProperty("--sq",s+"px");
+    return col.offsetHeight-wrap.offsetHeight;
+  }
+  /* The biggest board no wider than cap whose column fits in room. */
+  function biggest(cap,room){
+    var lo=20,hi=Math.floor(cap/8),m;
+    if(hi<=lo)return lo;
+    if(hi*8+under(hi)<=room)return hi;
+    while(hi-lo>1){m=(lo+hi)>>1;if(m*8+under(m)<=room)lo=m;else hi=m}
+    return lo;
+  }
+  var side=biggest(Math.min(W-GAP_SIDE-textW,720),H);
+  /* on top, the board may reach into the side padding (it is centred, and the
+     stage clips at its padding edge) -- on a phone that is 24px more board */
+  var stack=biggest(Math.min(stage.clientWidth-6,560),H-GAP_STACK-textH);
+  var stacked=stack>side*1.15;   /* beside the text unless on top is clearly bigger */
+  stage.classList.toggle("stacked",stacked);
+  fitUnder=under(stacked?stack:side);
+  moreCue();
 }
-window.addEventListener("resize",fit);
+/* The buttons change with the phase, and on a narrow board a longer label can
+   take another row. Refit only then, so the column never outgrows the stage. */
+function refitIfWrapped(){
+  var col=$("boardcol");
+  if($("stage").style.display!=="none"&&
+     col.offsetHeight-col.firstElementChild.offsetHeight!==fitUnder)fit();
+}
+var fitQueued=false;
+window.addEventListener("resize",function(){
+  if(fitQueued)return;fitQueued=true;
+  requestAnimationFrame(function(){fitQueued=false;fit()});
+});
+$("panel").addEventListener("scroll",moreCue,{passive:true});
 document.addEventListener("keydown",function(e){
   if($("veil").style.display!=="none"){if(e.key==="Escape")closeVeil();return}
   if(e.key==="Enter"){e.preventDefault();

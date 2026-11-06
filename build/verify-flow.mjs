@@ -1,8 +1,11 @@
 /**
- * The two rules the trainer has to keep:
+ * The rules the trainer has to keep:
  *
  *   1. the clock does not run while you are still reading the setup text
  *   2. a miss never shows the move -- only asking does
+ *   3. the author's arrows and rings are on the board with the text they belong
+ *      to -- the question's while you are asked, minus any that would give the
+ *      answer away, and the explanation's once you have answered
  *
  *   python3 -m http.server 8000 &
  *   node build/verify-flow.mjs http://localhost:8000/
@@ -270,6 +273,93 @@ await settle(["quiz"]);
   ok("it puts you back on the position", back.phase === "quiz", back.phase);
   ok("with the answer still hidden", !back.panel.includes(ans.san),
      { san: ans.san, panel: back.panel.slice(0, 90) });
+}
+
+console.log("\n11. the author's marks are drawn with the text they belong to");
+const marks = () => page.evaluate(() => {
+  const a = window.__CT.board.ann || { cal: [], csl: [] };
+  return { cal: [...a.cal].sort(), csl: [...a.csl].sort(),
+           drawn: document.querySelectorAll("#board .ov > *").length,
+           phase: window.__CT.S.phase, ply: window.__CT.S.ply,
+           panel: document.getElementById("panel").innerText };
+});
+// open an item with the clock off and answer your way to quiz move `ply`
+async function quizAt(idx, ply) {
+  await go(idx, 0);
+  for (let n = 0; n < 60; n++) {
+    const s = await page.evaluate(() => ({ phase: window.__CT.S.phase, ply: window.__CT.S.ply }));
+    if (s.phase === "quiz" && s.ply === ply) return;
+    if (s.phase === "quiz")
+      await page.evaluate(() => window.__CT.pick(window.__CT.item().plies[window.__CT.S.ply].u));
+    else if (s.phase === "solved") await page.evaluate(() => window.__CT.next());
+    await page.waitForTimeout(200);
+  }
+  throw new Error("never reached quiz move " + ply + " of item " + idx);
+}
+{
+  // 176: "How should Black defend the a4-pawn?" -- the knight's arrow onto a4
+  // and the ring on the pawn are the question; neither is the answer (Bb5)
+  await quizAt(176, 1);
+  const q = await marks();
+  ok("the question's arrow is on the board while you are asked",
+     q.cal.join() === "Gc5a4", q);
+  ok("and so is its ring", q.csl.join() === "Ra4", q);
+  ok("and they are actually drawn", q.drawn === 2, q.drawn);
+
+  await page.evaluate(() => window.__CT.hint());
+  const h = await marks();
+  ok("a hint rings the piece on top of them, not instead",
+     h.csl.includes("Yc4") && h.csl.includes("Ra4") && h.cal.includes("Gc5a4"), h);
+  ok("and says which ring is the hint", /circled in yellow/i.test(h.panel), h.panel.slice(-80));
+
+  // a wrong move puts the position back -- and the question with it
+  await quizAt(176, 1);
+  await page.evaluate(() => {
+    const p = window.__CT.item().plies[window.__CT.S.ply];
+    const bad = new Set([p.u].concat((p.alts || []).map((a) => a.u)));
+    window.__CT.pick(p.legal.split(" ").find((m) => m && !bad.has(m)));
+  });
+  await settle(["missed"]);
+  const m = await marks();
+  ok("after a miss the question's marks are back", m.cal.join() === "Gc5a4" && m.csl.join() === "Ra4", m);
+
+  await page.evaluate(() => window.__CT.reveal());
+  await settle(["taught"]);
+  const t = await marks();
+  ok("shown, the explanation's arrows join the question's",
+     t.cal.includes("Gc5a4") && t.cal.includes("Gb5a4"), t);
+}
+{
+  // 62: Ba3?? comes with a green arrow d5-d2 and a ring on d2 -- that is Qd2#,
+  // the answer itself. The bishop's own arrow and ring frame the question.
+  await quizAt(62, 1);
+  const q = await marks();
+  ok("a mark that is the answer move is held back", !q.cal.includes("Gd5d2"), q);
+  ok("as is a ring on the square it lands on", !q.csl.includes("Rd2"), q);
+  ok("while the rest of the question's marks stay", q.cal.join() === "Gc1a3" && q.csl.join() === "Gc1", q);
+  await page.evaluate(() => window.__CT.reveal());
+  await settle(["taught"]);
+  const t = await marks();
+  ok("answered, the held-back marks come back", t.cal.includes("Gd5d2") && t.csl.includes("Rd2"), t);
+}
+{
+  // 326: "Now the same idea won't work for White. Can you see why?" rings f2,
+  // where the answer (Qf2+) lands
+  await quizAt(326, 3);
+  const q = await marks();
+  ok("a lone ring on the answer square is held back", q.csl.length === 0 && q.drawn === 0, q);
+}
+{
+  // 156 ends on the opponent's Bc2=, "This is a fortress", with an arrow and a
+  // ring that were never drawn: the position ended without them
+  await quizAt(156, 11);
+  await page.evaluate(() => window.__CT.pick(window.__CT.item().plies[window.__CT.S.ply].u));
+  await settle(["done"]);
+  await page.waitForTimeout(200);
+  const e = await marks();
+  ok("a closing comment's marks are on the final position",
+     e.cal.includes("Gc2f5") && e.csl.includes("Gf5"), e);
+  ok("alongside its text", /fortress/i.test(e.panel), e.panel.slice(0, 120));
 }
 
 console.log("\njs errors   " + errs.length);
