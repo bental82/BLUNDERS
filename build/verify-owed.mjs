@@ -77,8 +77,19 @@ ok("the two-day-old miss can be earned back today",
    owed.owed.find(o => o.ord === 4).ready === true, owed.owed);
 ok("the one missed 40 minutes ago cannot yet",
    owed.owed.find(o => o.ord === 3).ready === false, owed.owed);
-ok("and it says when it can -- after midnight, not six hours from now",
-   owed.owed.find(o => o.ord === 3).at > Date.now() + 6 * 36e5, owed.owed);
+// The later of six hours on and the midnight after the miss. This used to
+// assert "more than six hours from now", which only holds before about 18:00:
+// later than that, midnight comes first and six hours is the later of the two.
+{
+  const o3 = owed.owed.find(o => o.ord === 3);
+  const due = await p.evaluate((ply) => {
+    const a = window.__CT.state().P.att["122:" + ply], miss = a[a.length - 1][1];
+    const mid = new Date(miss); mid.setHours(24, 0, 0, 0);
+    return Math.max(miss + 6 * 36e5, mid.getTime());
+  }, o3.ply);
+  ok("and it says when it can -- the later of six hours on and midnight",
+     o3.at === due, { at: new Date(o3.at).toString(), want: new Date(due).toString() });
+}
 
 console.log("\n2. the rail shows how many, not just that it is red");
 const rail = await p.evaluate(() => {
