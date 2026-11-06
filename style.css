@@ -22,6 +22,9 @@ body{
 button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 code{font-family:var(--fm);font-size:.88em;background:#ffffff0f;border:1px solid var(--line);
   padding:.06em .34em;border-radius:4px;white-space:nowrap;color:#f0d9a0}
+/* a square the text names that is outlined on the board right now, in the
+   board's colour for it (TM in app.js) */
+code.onboard{color:#8fd8f6;background:#5cc8f014;border-color:#5cc8f048}
 
 /* ---------- shell ---------- */
 #app{display:flex;height:100dvh;overflow:hidden;position:relative}

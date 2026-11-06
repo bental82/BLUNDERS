@@ -10,7 +10,9 @@
  * move is right, the orientation follows the student's colour, and the answer is
  * offered as legal — then plays the answer and carries on to the end of the item.
  * It also opens every lesson, exercises every tagged side line, and fails on any
- * unresolved text placeholder or JS error.
+ * unresolved text placeholder or JS error. At every question, answer and side
+ * line step, the squares outlined on the board must be exactly the ones the
+ * text on show marks as named (its cyan chips).
  */
 import pw from "playwright";
 const { chromium } = pw;
@@ -64,7 +66,19 @@ const report = await page.evaluate(async () => {
   }
 
   const bad = [];
-  let items = 0, quizzes = 0, lessons = 0, cards = 0, chips = 0;
+  let items = 0, quizzes = 0, lessons = 0, cards = 0, chips = 0, named = 0;
+
+  // every cyan chip in the text is outlined on the board, and every outline
+  // on the board has its chip -- whatever is showing
+  function agree(title, where) {
+    const tm = T.board.tm || { sq: [], ln: [] };
+    const on = new Set([...tm.sq, ...tm.ln.map((l) => l.join("-"))]);
+    const cs = [...document.querySelectorAll("#panel code.onboard")]
+                 .map((c) => c.textContent.replace(/^[KQRBN]/, ""));
+    if (on.size) named++;
+    if (!cs.every((c) => on.has(c)) || ![...on].every((s) => cs.includes(s)))
+      bad.push([title, "text and board disagree " + where, [...on].join(), cs.join()]);
+  }
 
   for (let i = 0; i < D.length; i++) {
     const it = D[i];
@@ -93,15 +107,21 @@ const report = await page.evaluate(async () => {
         if (T.board.turn !== ply.side) { bad.push([it.title, "wrong side to move at ply " + s.ply]); break; }
         if (!T.board.legal || T.board.legal.indexOf(ply.u) < 0) { bad.push([it.title, "answer not legal at ply " + s.ply]); break; }
         quizzes++;
+        agree(it.title, "asking ply " + s.ply);
         T.pick(ply.u);
         await sleep(60);
         // every side line on this ply should open and step without throwing
         let g2 = 0;
         while (T.S.phase !== "solved" && T.S.phase !== "done" && g2++ < 40) await sleep(25);
+        if (T.S.phase === "solved") agree(it.title, "answered ply " + s.ply);
         for (const el of document.querySelectorAll("#panel .alt")) {
           cards++;
           el.click(); await sleep(15);
-          for (const c of el.parentNode.querySelectorAll(".linebar .lm")) { c.click(); await sleep(10); chips++; }
+          agree(it.title, "on a side line at ply " + s.ply);
+          for (const c of el.parentNode.querySelectorAll(".linebar .lm")) {
+            c.click(); await sleep(10); chips++;
+            agree(it.title, "stepping a side line at ply " + s.ply);
+          }
         }
         if (/@@L|\{\{|\[%|undefined</.test(document.getElementById("panel").innerHTML))
           bad.push([it.title, "unresolved text in panel"]);
@@ -114,7 +134,7 @@ const report = await page.evaluate(async () => {
     }
     if (guard >= 40) bad.push([it.title, "guard tripped"]);
   }
-  return { items, quizzes, lessons, cards, chips, bad };
+  return { items, quizzes, lessons, cards, chips, named, bad };
 });
 
 console.log(`url         ${url}`);
@@ -122,6 +142,7 @@ console.log(`positions   ${report.items}`);
 console.log(`quiz moves  ${report.quizzes}`);
 console.log(`lessons     ${report.lessons}`);
 console.log(`side lines  ${report.cards} cards, ${report.chips} steps`);
+console.log(`named       ${report.named} screens mark squares the text names`);
 console.log(`js errors   ${errs.length}`);
 errs.slice(0, 10).forEach((e) => console.log("   " + e));
 console.log(`failures    ${report.bad.length}`);

@@ -106,7 +106,8 @@ Board.prototype.set=function(fen,last){
   this.pieces={};this.at=new Array(64).fill(null);
   var b=fenBoard(fen);
   for(var i=0;i<64;i++)if(b[i])this.spawn(b[i],i);
-  this.turn=fenTurn(fen);this.clearMarks();this.ann={cal:[],csl:[]};this.redrawAnn();
+  this.turn=fenTurn(fen);this.clearMarks();this.ann={cal:[],csl:[]};this.tm={sq:[],ln:[]};
+  this.redrawAnn();
   if(last)this.mark("last",[idxOf(last.slice(0,2)),idxOf(last.slice(2,4))]);
 };
 Board.prototype.move=function(uci){
@@ -192,9 +193,36 @@ Board.prototype.commit=function(from,to){
 Board.prototype.annotate=function(cal,csl){
   this.ann={cal:cal||[],csl:csl||[]};this.redrawAnn();
 };
+/* The squares and lines the text on show names (renderPanel works them out). */
+Board.prototype.mention=function(sq,ln){
+  this.tm={sq:sq||[],ln:ln||[]};this.redrawAnn();
+};
+var TM="#5cc8f0";
 Board.prototype.redrawAnn=function(){
   var o=this.ov;o.innerHTML="";var a=this.ann||{cal:[],csl:[]},self=this;
   function ctr(sq){var p=self.pos(idxOf(sq));return{x:p.c+.5,y:p.r+.5}}
+  function el(tag,at){var e=document.createElementNS(SVGNS,tag);
+    for(var k in at)e.setAttribute(k,at[k]);e.setAttribute("class","tm");o.appendChild(e)}
+  /* Named in the text: a cyan outline, under the author's marks and left off a
+     square the author has already circled. A dark rim keeps it legible on a
+     light square, the cyan on a dark one. Lines go dotted, so they cannot be
+     mistaken for the author's arrows. */
+  var tm=this.tm||{sq:[],ln:[]},circled={},done={};
+  a.csl.forEach(function(t){circled[t.slice(1,3)]=1});
+  tm.ln.forEach(function(l){
+    var pts=l.map(function(s){var c=ctr(s);return c.x+","+c.y}).join(" ");
+    var line={points:pts,fill:"none","stroke-linecap":"round","stroke-linejoin":"round",
+              "stroke-dasharray":"0 .24"};
+    line.stroke="#0b0e12";line["stroke-width"]=.13;line.opacity=.3;el("polyline",line);
+    line.stroke=TM;line["stroke-width"]=.085;line.opacity=.9;el("polyline",line);
+  });
+  tm.sq.forEach(function(s){
+    if(circled[s]||done[s])return;done[s]=1;
+    var p=self.pos(idxOf(s)),box={x:p.c+.06,y:p.r+.06,width:.88,height:.88,rx:.09};
+    box.fill=TM;box["fill-opacity"]=.16;box.stroke="#0b0e12";box["stroke-width"]=.11;
+    box["stroke-opacity"]=.3;el("rect",box);
+    box.fill="none";box.stroke=TM;box["stroke-width"]=.055;box["stroke-opacity"]=1;el("rect",box);
+  });
   a.csl.forEach(function(t){
     var c=ctr(t.slice(1,3)),el=document.createElementNS(SVGNS,"circle");
     el.setAttribute("cx",c.x);el.setAttribute("cy",c.y);el.setAttribute("r",.44);
@@ -221,10 +249,45 @@ Board.prototype.redrawAnn=function(){
 /* ============================== text ============================== */
 function esc(s){return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}
 var MOVE=/(^|[\s(–—"'“])([KQRBN]?[a-h][1-8](?:=[QRBN])?[+#]?[!?]{0,2}|O-O(?:-O)?[+#]?)(?=$|[\s.,;:)?!"'’”])/g;
-function fmt(s){
-  return esc(s).replace(MOVE,function(m,pre,mv){return pre+"<code>"+mv+"</code>"});
+/* The squares a text names, so the board can show them: "the pawn on f5", "the
+   e5-knight", "c2, g2, f5 and d5" -- and the lines, "the b1-h7 diagonal",
+   "Nd3-c5". A bare square is a pawn move instead when a move number comes
+   before it ("34. f5", "...g5") or a check or a glyph after it ("d5+",
+   "f5⁇"). A plain ? or ! after one ends the sentence: "Can White capture the
+   pawn on f5?" -- which is how the course uses it, 99 times out of 100.
+   With M, what it finds is collected there for the board, and its chip is
+   coloured to match (code.onboard); without, it is an ordinary chip. */
+var SQLINE=/(^|[^A-Za-z0-9])([KQRBN]?)([a-h][1-8](?:-[a-h][1-8])+)(?![0-9])/g;
+var SQBARE=/(^|[^A-Za-z0-9])([a-h][1-8])(?![0-9A-Za-z])/g;
+var MOVENO=/(?:^|[^a-h0-9])\d{1,3}\.(?:\s*\.\.)?\s*$|\.\.\.\s*$/;
+var GLYPH="+#⁇‼⁈⁉";
+function squares(s,M,keep){
+  var cls=M?' class="onboard"':"";   /* not .sq: that is a board square */
+  s=s.replace(SQLINE,function(m,pre,pc,line){
+    if(M)M.ln.push(line.split("-"));
+    keep.push("<code"+cls+">"+pc+line+"</code>");
+    return pre+"@@S"+(keep.length-1)+"@@";
+  });
+  return s.replace(SQBARE,function(m,pre,sq,off,all){
+    var at=off+pre.length,nx=all.charAt(at+2);
+    if(MOVENO.test(all.slice(Math.max(0,at-8),at))||(nx&&GLYPH.indexOf(nx)>=0))return m;
+    if(M)M.sq.push(sq);
+    keep.push("<code"+cls+">"+sq+"</code>");
+    return pre+"@@S"+(keep.length-1)+"@@";
+  });
 }
-function prose(t){
+/* the squares and lines a set of texts names, without rendering them */
+function namedIn(texts){
+  var M={sq:[],ln:[]};
+  (texts||[]).forEach(function(t){squares(esc(t||""),M,[])});
+  return M;
+}
+function fmt(s,M){
+  var keep=[];
+  s=squares(esc(s),M,keep).replace(MOVE,function(m,pre,mv){return pre+"<code>"+mv+"</code>"});
+  return s.replace(/@@S(\d+)@@/g,function(m,n){return keep[+n]});
+}
+function prose(t,M){
   if(!t)return"";
   var links=[],i;
   t=t.replace(/\[(https?:\/\/[^\]\s]+)\]/g,function(m,u){
@@ -242,8 +305,8 @@ function prose(t){
     var isList=/^\s*\*\s+/.test(lines[0]);
     if(isList){
       out+="<ul>"+lines.filter(function(l){return l.trim()}).map(function(l){
-        return "<li>"+fmt(l.replace(/^\s*\*\s+/,""))+"</li>"}).join("")+"</ul>";
-    } else out+="<p>"+fmt(b.replace(/\n/g," "))+"</p>";
+        return "<li>"+fmt(l.replace(/^\s*\*\s+/,""),M)+"</li>"}).join("")+"</ul>";
+    } else out+="<p>"+fmt(b.replace(/\n/g," "),M)+"</p>";
   }
   out=out.replace(/<\/ul><ul>/g,"");
   return out.replace(/@@L(\d+)@@/g,function(m,n){return links[+n]||""});
@@ -745,9 +808,11 @@ function askMarks(){
   if(!a)return {cal:[],csl:[]};
   for(i=S.ply;i<it.plies.length;i++)if(it.plies[i].q){q=it.plies[i];break}
   if(!q)return {cal:a.cal||[],csl:a.csl||[]};
-  var mv=q.u.slice(0,4),to=q.u.slice(2,4);
+  /* a circle on a square the question itself names gives nothing away --
+     "Why is he just giving me the h6-pawn?" circles h6 */
+  var mv=q.u.slice(0,4),to=q.u.slice(2,4),said=namedIn(S.parts).sq.indexOf(to)>=0;
   return {cal:(a.cal||[]).filter(function(t){return t.slice(1,5)!==mv}),
-          csl:(a.csl||[]).filter(function(t){return t.slice(1,3)!==to})};
+          csl:(a.csl||[]).filter(function(t){return said||t.slice(1,3)!==to})};
 }
 function showAsk(extraCsl){
   var m=askMarks();board.annotate(m.cal,m.csl.concat(extraCsl||[]));
@@ -897,7 +962,11 @@ var ICO={ok:'<svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg>',
 function renderPanel(){
   var it=item();if(it.kind!=="pos")return;
   var p=it.plies[Math.min(S.ply,it.plies.length-1)],h="";
-  var ctx=S.parts.map(function(t){return prose(t)}).join("");
+  /* The squares named by the text about the position on the board -- the main
+     line's, unless a side line or a trap is on the board instead -- go into M
+     and onto the board. Their chips turn cyan to match; nothing else does. */
+  var M={sq:[],ln:[]},main=(S.explore||S.phase==="trap"||S.phase==="done")?null:M;
+  var ctx=S.parts.map(function(t){return prose(t,main)}).join("");
   if(S.phase==="intro"||S.phase==="quiz"||S.phase==="idle"||S.phase==="ready"){
     if(ctx)h+='<div class="ask">'+ctx+"</div>";
     if(S.phase==="ready")
@@ -911,14 +980,14 @@ function renderPanel(){
     h+='<div style="margin-bottom:12px"><span class="movetag ok">'+esc(p.s)+"</span></div>";
     h+=redeemNote(true);      /* right, but not always enough to clear the red */
     if(ctx)h+='<div class="prose" style="opacity:.6">'+ctx+"</div>";
-    if(p.t)h+='<div class="prose">'+prose(p.t)+"</div>";
-    h+=altsBlock(p);
+    if(p.t)h+='<div class="prose">'+prose(p.t,main)+"</div>";
+    h+=altsBlock(p,M);
   } else if(S.phase==="trap"){
     var a=S.trapAlt;
     h+='<div class="verdict v-no"><span class="mk">'+ICO.no+"</span>Blunder</div>";
     h+='<div style="margin-bottom:12px"><span class="movetag no">'+esc(a.s)+"</span></div>";
     h+='<div class="prose">'+a.line.slice(0,S.trapK+1).map(function(x){
-        return x.t?prose(x.t):""}).join("")+"</div>";
+        return x.t?prose(x.t,M):""}).join("")+"</div>";
     h+=lineBar(a,S.trapK,"trap");
   } else if(S.phase==="missed"){
     var tmo2=(S.why==="Out of time.");
@@ -935,9 +1004,9 @@ function renderPanel(){
        (tmo?ICO.nu:ICO.no)+"</span>"+esc(S.why||"")+"</div>";
     h+='<div style="margin-bottom:12px"><span class="movetag ok">'+esc(p.s)+"</span></div>";
     if(ctx)h+='<div class="prose" style="opacity:.6">'+ctx+"</div>";
-    if(p.t)h+='<div class="prose">'+prose(p.t)+"</div>";
+    if(p.t)h+='<div class="prose">'+prose(p.t,main)+"</div>";
     h+=redeemNote();
-    h+=altsBlock(p);
+    h+=altsBlock(p,M);
   } else if(S.phase==="done"){
     var qs=quizCount(it),left=outstanding(it),y;
     if(!left.length){
@@ -958,9 +1027,10 @@ function renderPanel(){
          "red clears.</div>";
     }
     var lastp=it.plies[it.plies.length-1];
-    if(!lastp.q&&lastp.t)h+='<div class="prose">'+prose(lastp.t)+"</div>";
+    if(!lastp.q&&lastp.t)h+='<div class="prose">'+prose(lastp.t,M)+"</div>";
   }
   var pn=$("panel");pn.innerHTML=h;
+  board.mention(M.sq,M.ln);
   /* A new phase opens at its verdict, not wherever the last one was scrolled
      to; a re-render within a phase (a hint, a step along a line) keeps it. */
   var key=S.k+"/"+S.phase;
@@ -991,30 +1061,31 @@ function defaultAsk(it,p){
   if(m)return "Move the piece "+m[1]+" times in a row without ever letting it be captured.";
   return (p.side==="w"?"White":"Black")+" to play.";
 }
-function altsBlock(p){
+function altsBlock(p,M){
   if(!p.alts||!p.alts.length)return"";
   var h="",bad=[],ok=[];
   p.alts.forEach(function(a,i){(a.bad?bad:ok).push(i)});
   if(bad.length){
     h+='<div class="sect"><div class="sect-h">What goes wrong</div>';
-    bad.forEach(function(i){h+=altCard(p.alts[i],i,"blunder")});
+    bad.forEach(function(i){h+=altCard(p.alts[i],i,"blunder",M)});
     h+="</div>";
   }
   if(ok.length){
     h+='<div class="sect"><div class="sect-h">Also considered</div>';
-    ok.forEach(function(i){h+=altCard(p.alts[i],i,"")});
+    ok.forEach(function(i){h+=altCard(p.alts[i],i,"",M)});
     h+="</div>";
   }
   return h;
 }
-function altCard(a,idx,tag){
+function altCard(a,idx,tag,M){
   var open=!!(S.explore&&S.explore.i===idx);
   var h='<div class="alt'+(open?" on":"")+'" data-alt="'+idx+'">'+
         '<div class="alt-h"><span class="movetag '+(a.bad?"no":"ok")+'">'+esc(a.s)+"</span>"+
         (tag?'<span class="why">'+tag+"</span>":"")+"</div>";
   var upto=open?S.explore.k:0;
+  /* only the line on the board names squares on it */
   h+='<div class="prose">'+a.line.slice(0,upto+1).map(function(x){
-      return x.t?prose(x.t):""}).join("")+"</div>";
+      return x.t?prose(x.t,open?M:null):""}).join("")+"</div>";
   h+=lineBar(a,open?S.explore.k:-1,"alt"+idx);
   return h+"</div>";
 }
@@ -1348,5 +1419,6 @@ syncMark(syncOn?"busy":"off");
 if(syncOn){cloudSync();cloudBeat()}
 window.__CT={S:S,board:board,sync:cloudSync,absorb:absorb,begin:begin,
   resOf:resOf,pending:pending,statusOf:statusOf,outstanding:outstanding,owedOn:owedOn,
-  reveal:reveal,retry:retry,hint:hint,state:function(){return {P:P,C:C,G:G,T:T}},next:next,jumpTo:jumpTo,pick:onPick,item:item,fit:fit};
+  reveal:reveal,retry:retry,hint:hint,state:function(){return {P:P,C:C,G:G,T:T}},next:next,jumpTo:jumpTo,pick:onPick,item:item,fit:fit,
+  named:namedIn};
 }

@@ -279,7 +279,8 @@ console.log("\n11. the author's marks are drawn with the text they belong to");
 const marks = () => page.evaluate(() => {
   const a = window.__CT.board.ann || { cal: [], csl: [] };
   return { cal: [...a.cal].sort(), csl: [...a.csl].sort(),
-           drawn: document.querySelectorAll("#board .ov > *").length,
+           // the author's own marks; squares named in the text are .tm (section 12)
+           drawn: document.querySelectorAll("#board .ov > :not(.tm)").length,
            phase: window.__CT.S.phase, ply: window.__CT.S.ply,
            panel: document.getElementById("panel").innerText };
 });
@@ -360,6 +361,79 @@ async function quizAt(idx, ply) {
   ok("a closing comment's marks are on the final position",
      e.cal.includes("Gc2f5") && e.csl.includes("Gf5"), e);
   ok("alongside its text", /fortress/i.test(e.panel), e.panel.slice(0, 120));
+}
+
+console.log("\n12. the squares the text names are marked on the board");
+const named = () => page.evaluate(() => {
+  const tm = window.__CT.board.tm || { sq: [], ln: [] };
+  return {
+    sq: [...new Set(tm.sq)].sort(), ln: tm.ln.map((l) => l.join("-")).sort(),
+    drawn: document.querySelectorAll("#board .ov .tm").length,
+    chips: [...document.querySelectorAll("#panel code.onboard")]
+             .map((c) => c.textContent.replace(/^[KQRBN]/, "")),
+    html: document.getElementById("panel").innerHTML,
+  };
+});
+// every cyan chip is marked on the board, and every mark on the board has one
+const agree = (n) => {
+  const on = new Set([...n.sq, ...n.ln]);
+  return n.chips.every((c) => on.has(c)) && [...on].every((s) => n.chips.includes(s));
+};
+{
+  // "Can White capture the pawn on f5?" -- the author drew nothing here
+  await quizAt(187, 0);
+  const q = await named();
+  ok("“the pawn on f5” marks f5 while you are asked", q.sq.join() === "f5" && q.drawn > 0, q);
+  ok("its chip is f5, with the question mark left outside",
+     q.html.includes('<code class="onboard">f5</code>?'), q.html);
+  ok("chips and board agree", agree(q), q);
+  await page.evaluate(() => window.__CT.reveal());
+  await settle(["taught"]);
+  const t = await named();
+  ok("answered, the question's square is still marked", t.sq.includes("f5"), t);
+  ok("chips and board still agree", agree(t), t);
+}
+{
+  // a side line names squares of its own; on the board, they are what is marked
+  await quizAt(34, 1);
+  await page.evaluate(() => window.__CT.pick(window.__CT.item().plies[window.__CT.S.ply].u));
+  await settle(["solved"]);
+  const m = await named();
+  ok("the explanation's square is marked", m.sq.includes("b5"), m);
+  await page.evaluate(() => document.querySelector('.alt[data-alt="0"]').click());
+  await page.waitForTimeout(250);
+  const a = await named();
+  ok("exploring a side line marks the squares its text names",
+     a.sq.includes("f4") && a.sq.includes("g5"), a);
+  ok("and no longer the main line's", !a.sq.includes("b5"), a);
+  ok("chips and board agree there too", agree(a), a);
+}
+{
+  const r = await page.evaluate(() => {
+    const n = (t) => { const m = window.__CT.named([t]);
+      return m.sq.join() + "|" + m.ln.map((l) => l.join("-")).join(); };
+    return {
+      move: n("The move 34. f5⁇ was a major"), check: n("43.Bd1⁇ d5+ Black can"),
+      dots: n("between ...g5 and ...Kc6"), hyph: n("the e5-knight and the b7- and g6-pawns"),
+      line: n("the b1-h7 diagonal, and Nd3-c5"), list: n("checking squares: c2, g2, f5 and d5."),
+      stop: n("a3 and h3. h3 served"),
+    };
+  });
+  ok("a numbered pawn move is not a square", r.move === "|", r.move);
+  ok("nor one with a check after it", r.check === "|", r.check);
+  ok("nor a ...move", r.dots === "|", r.dots);
+  ok("“the e5-knight” and “the b7- and g6-pawns” are squares", r.hyph === "e5,b7,g6|", r.hyph);
+  ok("a diagonal and a manoeuvre are lines", r.line === "|b1-h7,d3-c5", r.line);
+  ok("a list names every square in it", r.list === "c2,g2,f5,d5|", r.list);
+  ok("a square ending a sentence is not a move number", r.stop === "a3,h3,h3|", r.stop);
+}
+{
+  // 118: "Why is he just giving me the h6-pawn?" -- the author circles h6, where
+  // the answer lands; the question names it, so the circle gives nothing away
+  await quizAt(118, 1);
+  const q = await marks();
+  ok("a circle on a square the question names stays", q.csl.includes("Rh6"), q);
+  ok("while the arrow of the answer move is still held back", !q.cal.includes("Bg6h6"), q);
 }
 
 console.log("\njs errors   " + errs.length);
