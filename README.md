@@ -17,10 +17,12 @@ course, where the arrows the author drew and the clock you're under *are* the le
   or a circle on the square it lands on, unless the question names that square) waits
   with them; eight questions draw one.
 - Marks the squares the text names, where the author drew nothing. *"Can White capture
-  the pawn on f5?"* outlines f5, and the f5 in the sentence turns cyan to match; "the
-  b1-h7 diagonal" or "Nd3-c5" is a dotted line. It is the text about the position on the
-  board that does this — open a side line and its squares replace the main line's — so a
-  cyan square in the text is always one you can see. A bare square after a move number
+  the pawn on f5?"* puts a thin ring around f5, drawn in the board's own coordinate
+  colours, so it is quieter than anything the author drew and suits every theme; "the
+  b1-h7 diagonal" or "Nd3-c5" is a dotted line. In the text, a ringed square's chip is
+  white rather than a move's amber. It is the text about the position on the board that
+  does this — open a side line and its squares replace the main line's — so a white
+  square in the text is always one you can see. A bare square after a move number
   (*34. f5*) or before a check (*d5+*) is a move, not a square, and is left alone.
 - Keeps the board on screen. Only the text scrolls, so reading to the end of a long
   comment never pushes the position it explains out of view. The text goes beside the
@@ -236,7 +238,7 @@ Six suites, all needing `npm i playwright` and a server on :8000.
 
 | | covers |
 |---|---|
-| `verify.mjs` | walks all 328 positions and plays all 835 answers, checking board vs FEN, side to move, orientation, legality, every lesson and side line — and at every step, that the squares outlined on the board are exactly the ones the text shows in cyan |
+| `verify.mjs` | walks all 328 positions and plays all 835 answers, checking board vs FEN, side to move, orientation, legality, every lesson and side line — and at every step, that the squares ringed on the board are exactly the ones the text sets apart |
 | `verify-flow.mjs` | the clock gate, that a miss withholds the move until asked, that the author's marks are drawn with their text minus any that give the answer away, and that the squares the text names are marked |
 | `verify-redeem.mjs` | the day-and-six-hours rule, the midnight loophole, one-ask-one-attempt, merge convergence, migration |
 | `verify-owed.mjs` | which moves hold a position red, the rail's count, and that neither a right-but-too-soon answer nor the end of a red position claims to be green |

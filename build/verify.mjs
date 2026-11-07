@@ -12,7 +12,7 @@
  * It also opens every lesson, exercises every tagged side line, and fails on any
  * unresolved text placeholder or JS error. At every question, answer and side
  * line step, the squares outlined on the board must be exactly the ones the
- * text on show marks as named (its cyan chips).
+ * text on show marks as named (its code.onboard chips).
  */
 import pw from "playwright";
 const { chromium } = pw;
@@ -68,7 +68,7 @@ const report = await page.evaluate(async () => {
   const bad = [];
   let items = 0, quizzes = 0, lessons = 0, cards = 0, chips = 0, named = 0;
 
-  // every cyan chip in the text is outlined on the board, and every outline
+  // every square chip in the text is ringed on the board, and every ring
   // on the board has its chip -- whatever is showing
   function agree(title, where) {
     const tm = T.board.tm || { sq: [], ln: [] };

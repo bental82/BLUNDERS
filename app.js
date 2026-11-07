@@ -197,31 +197,31 @@ Board.prototype.annotate=function(cal,csl){
 Board.prototype.mention=function(sq,ln){
   this.tm={sq:sq||[],ln:ln||[]};this.redrawAnn();
 };
-var TM="#5cc8f0";
 Board.prototype.redrawAnn=function(){
   var o=this.ov;o.innerHTML="";var a=this.ann||{cal:[],csl:[]},self=this;
   function ctr(sq){var p=self.pos(idxOf(sq));return{x:p.c+.5,y:p.r+.5}}
-  function el(tag,at){var e=document.createElementNS(SVGNS,tag);
-    for(var k in at)e.setAttribute(k,at[k]);e.setAttribute("class","tm");o.appendChild(e)}
-  /* Named in the text: a cyan outline, under the author's marks and left off a
-     square the author has already circled. A dark rim keeps it legible on a
-     light square, the cyan on a dark one. Lines go dotted, so they cannot be
-     mistaken for the author's arrows. */
+  function el(tag,at,cls){var e=document.createElementNS(SVGNS,tag);
+    for(var k in at)e.setAttribute(k,at[k]);e.setAttribute("class","tm "+cls);o.appendChild(e)}
+  /* Named in the text: a thin ring, in the board's own coordinate ink -- dark
+     on a light square, light on a dark one -- so it is quieter than anything
+     the author drew and sits on every theme without a colour of its own (the
+     inks are CSS variables: style.css, .ov .tm-*). It goes under the author's
+     marks and is left off a square the author has already circled. Lines are
+     dotted in both inks, a light dot on a dark rim, since a line crosses both
+     kinds of square -- and dotted, so they cannot pass for the author's arrows. */
   var tm=this.tm||{sq:[],ln:[]},circled={},done={};
   a.csl.forEach(function(t){circled[t.slice(1,3)]=1});
   tm.ln.forEach(function(l){
     var pts=l.map(function(s){var c=ctr(s);return c.x+","+c.y}).join(" ");
-    var line={points:pts,fill:"none","stroke-linecap":"round","stroke-linejoin":"round",
-              "stroke-dasharray":"0 .24"};
-    line.stroke="#0b0e12";line["stroke-width"]=.13;line.opacity=.3;el("polyline",line);
-    line.stroke=TM;line["stroke-width"]=.085;line.opacity=.9;el("polyline",line);
+    var line={points:pts,fill:"none","stroke-linecap":"round","stroke-dasharray":"0 .22"};
+    line["stroke-width"]=.115;line.opacity=.6;el("polyline",line,"tm-l");
+    line["stroke-width"]=.075;line.opacity=.95;el("polyline",line,"tm-d");
   });
   tm.sq.forEach(function(s){
     if(circled[s]||done[s])return;done[s]=1;
-    var p=self.pos(idxOf(s)),box={x:p.c+.06,y:p.r+.06,width:.88,height:.88,rx:.09};
-    box.fill=TM;box["fill-opacity"]=.16;box.stroke="#0b0e12";box["stroke-width"]=.11;
-    box["stroke-opacity"]=.3;el("rect",box);
-    box.fill="none";box.stroke=TM;box["stroke-width"]=.055;box["stroke-opacity"]=1;el("rect",box);
+    var i=idxOf(s),p=self.pos(i),light=((i%8)+((i/8)|0))%2===0;
+    el("rect",{x:p.c+.07,y:p.r+.07,width:.86,height:.86,rx:.1,fill:"none",
+               "stroke-width":.035,opacity:.85},light?"tm-l":"tm-d");
   });
   a.csl.forEach(function(t){
     var c=ctr(t.slice(1,3)),el=document.createElementNS(SVGNS,"circle");
@@ -964,7 +964,8 @@ function renderPanel(){
   var p=it.plies[Math.min(S.ply,it.plies.length-1)],h="";
   /* The squares named by the text about the position on the board -- the main
      line's, unless a side line or a trap is on the board instead -- go into M
-     and onto the board. Their chips turn cyan to match; nothing else does. */
+     and onto the board, and their chips are set apart to match (code.onboard);
+     a square named anywhere else stays an ordinary chip. */
   var M={sq:[],ln:[]},main=(S.explore||S.phase==="trap"||S.phase==="done")?null:M;
   var ctx=S.parts.map(function(t){return prose(t,main)}).join("");
   if(S.phase==="intro"||S.phase==="quiz"||S.phase==="idle"||S.phase==="ready"){

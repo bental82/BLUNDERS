@@ -374,7 +374,7 @@ const named = () => page.evaluate(() => {
     html: document.getElementById("panel").innerHTML,
   };
 });
-// every cyan chip is marked on the board, and every mark on the board has one
+// every square chip (code.onboard) is ringed on the board, and every ring has one
 const agree = (n) => {
   const on = new Set([...n.sq, ...n.ln]);
   return n.chips.every((c) => on.has(c)) && [...on].every((s) => n.chips.includes(s));
